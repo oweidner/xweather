@@ -1,6 +1,8 @@
 #ifndef LOCATIONS_H
 #define LOCATIONS_H
 
+#include <time.h>
+
 #include "model.h" /* DailyForecast, FORECAST_DAYS */
 
 #define MAX_LOCATIONS 16
@@ -13,6 +15,8 @@ typedef struct {
     DailyForecast days[FORECAST_DAYS];
     double        current_temperature_c; /* meaningless until has_data is set */
     int           has_data; /* 0 until weather data has been fetched for this location */
+    time_t        last_updated; /* wall-clock time of the last successful fetch;
+                                  * meaningless until has_data is set */
 } Location;
 
 typedef struct LocationList LocationList;

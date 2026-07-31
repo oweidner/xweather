@@ -3,48 +3,18 @@
 #include <stdlib.h>
 
 #include <X11/Xlib.h>
-#include <X11/xpm.h>
 #include <Xm/Xm.h>
 #include <Xm/Form.h>
 #include <Xm/Label.h>
 
-#include "weather_widget.h"
+#include "daily_forecast_view.h"
+#include "weather_icons.h"
 
 /* Motif has no font-independent "bold" resource on XmLabel; weight is only
  * ever expressed as part of a font descriptor. This asks for bold at a
  * larger pixel size and wildcards everything else, so the X server still
  * matches it against the same default font family (here, "Misc Fixed"). */
 #define BOLD_FONT "-*-*-bold-r-*-*-18-*-*-*-*-*-*-*"
-
-typedef enum {
-    ICON_CLEAR,
-    ICON_FEW_CLOUDS,
-    ICON_OVERCAST,
-    ICON_FOG,
-    ICON_SHOWERS,
-    ICON_SNOW,
-    ICON_STORM,
-    ICON_COUNT
-} IconKind;
-
-/* Pre-converted from the GNOME Weather app's own "small" icon variant
- * (package gnome-weather, /usr/share/icons/hicolor/scalable/status/weather-*
- * -small.svg; GPL-2+, see /usr/share/doc/gnome-weather/copyright), flattened
- * onto the same background color create_day_column() darkens its cards to.
- * Assumes the app is run from the project root, matching how this project
- * is built. assets/icons/32x32 holds the same set at a smaller size, for
- * contexts that don't need the full 64x64 (currently unused by this file). */
-static const char *icon_files[ICON_COUNT] = {
-    "assets/icons/64x64/weather-clear.xpm",
-    "assets/icons/64x64/weather-few-clouds.xpm",
-    "assets/icons/64x64/weather-overcast.xpm",
-    "assets/icons/64x64/weather-fog.xpm",
-    "assets/icons/64x64/weather-showers.xpm",
-    "assets/icons/64x64/weather-snow.xpm",
-    "assets/icons/64x64/weather-storm.xpm",
-};
-
-static Pixmap icon_cache[ICON_COUNT];
 
 typedef struct {
     Widget day_name;
@@ -54,12 +24,13 @@ typedef struct {
     Widget low;
 } DayColumn;
 
-struct WeatherWidget {
+struct DailyForecastView {
+    Widget    form;
     DayColumn days[FORECAST_DAYS];
 };
 
 /* Returns `context`'s current background darkened by `factor` (e.g. 0.85
- * for 15% darker), so the widget's cards stand out from their parent. */
+ * for 15% darker), so the view's cards stand out from their parent. */
 static Pixel
 darker_background(Widget context, double factor)
 {
@@ -108,52 +79,6 @@ set_label_text(Widget label, const char *text)
 
     XtVaSetValues(label, XmNlabelString, xmstr, NULL);
     XmStringFree(xmstr);
-}
-
-/* Maps an Open-Meteo/WMO daily weathercode to an icon. See
- * https://open-meteo.com/en/docs for the full code table. */
-static IconKind
-icon_kind_for_weather_code(int code)
-{
-    switch (code) {
-    case 0:                                      return ICON_CLEAR;
-    case 1: case 2:                               return ICON_FEW_CLOUDS;
-    case 3:                                       return ICON_OVERCAST;
-    case 45: case 48:                              return ICON_FOG;
-    case 51: case 53: case 55: case 56: case 57:
-    case 61: case 63: case 65: case 66: case 67:
-    case 80: case 81: case 82:                     return ICON_SHOWERS;
-    case 71: case 73: case 75: case 77:
-    case 85: case 86:                              return ICON_SNOW;
-    case 95: case 96: case 99:                     return ICON_STORM;
-    default:                                       return ICON_CLEAR;
-    }
-}
-
-/* Loads (and caches, since there are only ICON_COUNT distinct images) the
- * pixmap for `kind`. Returns XmUNSPECIFIED_PIXMAP if the file is missing. */
-static Pixmap
-get_icon_pixmap(Widget context, IconKind kind)
-{
-    if (icon_cache[kind] == 0) {
-        Display *dpy = XtDisplay(context);
-        Window   root = RootWindowOfScreen(XtScreen(context));
-        Pixmap   pixmap, shape_mask;
-        int      status;
-
-        status = XpmReadFileToPixmap(dpy, root, (char *)icon_files[kind], &pixmap, &shape_mask, NULL);
-        if (status != XpmSuccess) {
-            fprintf(stderr, "weather_widget: failed to load icon \"%s\": %s\n",
-                    icon_files[kind], XpmGetErrorString(status));
-            return XmUNSPECIFIED_PIXMAP;
-        }
-        if (shape_mask != None)
-            XFreePixmap(dpy, shape_mask); /* icons are pre-flattened; no mask needed */
-
-        icon_cache[kind] = pixmap;
-    }
-
-    return icon_cache[kind];
 }
 
 static void
@@ -206,7 +131,7 @@ create_day_column(Widget parent, int index, Pixel bg, DayColumn *out)
     out->icon = XtVaCreateManagedWidget("dayIcon", xmLabelWidgetClass, column,
                                          XmNbackground, bg,
                                          XmNlabelType, XmPIXMAP,
-                                         XmNlabelPixmap, get_icon_pixmap(column, ICON_CLEAR),
+                                         XmNlabelPixmap, weather_icon_for_code(column, 0),
                                          XmNtopAttachment, XmATTACH_WIDGET,
                                          XmNtopWidget, out->date,
                                          XmNtopOffset, 10,
@@ -242,23 +167,38 @@ create_day_column(Widget parent, int index, Pixel bg, DayColumn *out)
                                         NULL);
 }
 
-WeatherWidget *
-weather_widget_create(Widget parent)
+DailyForecastView *
+daily_forecast_view_create(Widget parent)
 {
-    WeatherWidget *widget = calloc(1, sizeof(*widget));
-    Pixel          background = darker_background(parent, 0.85);
-    int            i;
+    DailyForecastView *view = calloc(1, sizeof(*view));
+    Pixel               background;
+    int                  i;
+
+    view->form = XtVaCreateManagedWidget("dailyForecastView", xmFormWidgetClass, parent,
+                                          XmNtopAttachment, XmATTACH_FORM,
+                                          XmNbottomAttachment, XmATTACH_FORM,
+                                          XmNleftAttachment, XmATTACH_FORM,
+                                          XmNrightAttachment, XmATTACH_FORM,
+                                          NULL);
+
+    background = darker_background(view->form, 0.85);
 
     for (i = 0; i < FORECAST_DAYS; i++)
-        create_day_column(parent, i, background, &widget->days[i]);
+        create_day_column(view->form, i, background, &view->days[i]);
 
-    return widget;
+    return view;
 }
 
 void
-weather_widget_destroy(WeatherWidget *widget)
+daily_forecast_view_destroy(DailyForecastView *view)
 {
-    free(widget);
+    free(view);
+}
+
+Widget
+daily_forecast_view_widget(DailyForecastView *view)
+{
+    return view->form;
 }
 
 static void
@@ -275,24 +215,22 @@ set_temperature_label(Widget label, const char *prefix, double temperature_c)
 }
 
 void
-weather_widget_set_forecast(WeatherWidget *widget, const DailyForecast *days)
+daily_forecast_view_set_forecast(DailyForecastView *view, const DailyForecast *days)
 {
     int i;
 
     for (i = 0; i < FORECAST_DAYS; i++) {
-        Widget icon = widget->days[i].icon;
+        Widget icon = view->days[i].icon;
 
-        set_label_text(widget->days[i].day_name, days[i].day_name);
-        set_label_text(widget->days[i].date, days[i].date_label);
-        set_temperature_label(widget->days[i].high, "H: ", days[i].high_c);
-        set_temperature_label(widget->days[i].low, "L: ", days[i].low_c);
+        set_label_text(view->days[i].day_name, days[i].day_name);
+        set_label_text(view->days[i].date, days[i].date_label);
+        set_temperature_label(view->days[i].high, "H: ", days[i].high_c);
+        set_temperature_label(view->days[i].low, "L: ", days[i].low_c);
 
         if (days[i].weather_code < 0) {
             XtUnmanageChild(icon);
         } else {
-            XtVaSetValues(icon, XmNlabelPixmap,
-                           get_icon_pixmap(icon, icon_kind_for_weather_code(days[i].weather_code)),
-                           NULL);
+            XtVaSetValues(icon, XmNlabelPixmap, weather_icon_for_code(icon, days[i].weather_code), NULL);
             XtManageChild(icon);
 
             /* XmLabel doesn't reliably repaint on its own when only

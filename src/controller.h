@@ -15,9 +15,10 @@ void controller_create(XtAppContext app, WeatherModel *model, LocationList *loca
 
 /* Makes locations[index] the active/displayed location: shows whatever
  * data `locations[index]` currently holds (cached, or the N/A placeholder)
- * immediately, without blocking. If that location hasn't been fetched yet,
- * starts (or lets an already-running) background fetch for it -- the model
- * is updated again asynchronously once that fetch completes. */
+ * immediately, without blocking, then always starts (or lets an
+ * already-running) background fetch for it, so switching to a location
+ * always refreshes its data -- the model is updated again asynchronously
+ * once that fetch completes. */
 void controller_select_location(WeatherModel *model, LocationList *locations, int index);
 
 /* Starts a background fetch for every location that doesn't have data yet

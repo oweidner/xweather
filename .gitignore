@@ -1,0 +1,4 @@
+/build/
+/xweather
+*.code-workspace
+.claude/

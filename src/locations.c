@@ -78,4 +78,5 @@ location_list_set_data(LocationList *list, int index, const DailyForecast *days,
     memcpy(entry->days, days, sizeof(entry->days));
     entry->current_temperature_c = current_temperature_c;
     entry->has_data = 1;
+    entry->last_updated = time(NULL);
 }
