@@ -1,0 +1,38 @@
+CC       = @CC@
+CFLAGS   = @CFLAGS@
+LDFLAGS  = @LDFLAGS@
+LIBS     = @LIBS@
+PREFIX   = @PREFIX@
+
+SRCDIR   = src
+BUILDDIR = build
+TARGET   = xweather
+
+SOURCES  = $(wildcard $(SRCDIR)/*.c)
+OBJECTS  = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
+DEPS     = $(OBJECTS:.o=.d)
+
+.PHONY: all clean distclean install
+
+all: $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBS)
+
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
+	$(CC) $(CFLAGS) -MMD -c -o $@ $<
+
+$(BUILDDIR):
+	mkdir -p $(BUILDDIR)
+
+-include $(DEPS)
+
+clean:
+	rm -rf $(BUILDDIR) $(TARGET)
+
+distclean: clean
+	rm -f Makefile config.log
+
+install: all
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
