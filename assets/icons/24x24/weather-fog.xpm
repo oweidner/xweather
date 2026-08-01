@@ -1,0 +1,34 @@
+/* XPM */
+static const char *weather_fog[] = {
+/* columns rows colors chars-per-pixel */
+"24 24 4 1 ",
+"  c #A0B3CA",
+". c #A0B3CB",
+"X c #A0B3CC",
+"o c None",
+/* pixels */
+"oooooooooooooooooooooooo",
+"oooooooooooooooooooooooo",
+"oooXXX oooo  oooo    ooo",
+"ooo  X  oo  X oo     ooo",
+"oo         X X X      oo",
+"o   ooX    oo XX  oo   o",
+"o  ooooX  oooo   oooo  o",
+"oooooooooooooooooooooooo",
+"oooooooooooooooooooooooo",
+"oooo oooooo  ooooo  oooo",
+"ooo X  ooo  XXooo    ooo",
+"oo X X  o   XXXo      oo",
+"o  Xo    X oo      o   o",
+"o  ooo   Xooo    Xoo   o",
+"o oooooo oooooo oooooo o",
+"oooooooooooooooooooooooo",
+"oooooooooooooooooooooooo",
+"ooo    oooo  oooo   oooo",
+"ooo  XXXoo    ooXXXXXooo",
+"oo    X            XX oo",
+"o   ooX    oo     ooX  o",
+"o  ooooXX oooo   oooo  o",
+"oooooooooooooooooooooooo",
+"oooooooooooooooooooooooo"
+};

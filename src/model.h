@@ -11,10 +11,20 @@ typedef struct {
     int    weather_code;   /* WMO weather code (-1 if unavailable) */
 } DailyForecast;
 
+#define HOURLY_SLOTS 10
+
+typedef struct {
+    char   hour_label[8]; /* "Now" for slot 0, else "HH:00"; empty if unavailable */
+    double temperature_c; /* NAN if unavailable */
+    int    weather_code;  /* WMO weather code (-1 if unavailable) */
+    int    is_day;        /* 1 = daytime, 0 = nighttime (meaningless if weather_code < 0) */
+} HourlySlot;
+
 typedef struct WeatherModel WeatherModel;
 
 typedef void (*WeatherObserverFn)(const char *location, const DailyForecast *days,
-                                   double current_temperature_c, void *client_data);
+                                   const HourlySlot *hourly, double current_temperature_c,
+                                   int current_is_day, void *client_data);
 
 WeatherModel *weather_model_create(void);
 void          weather_model_destroy(WeatherModel *model);
@@ -24,8 +34,12 @@ void          weather_model_destroy(WeatherModel *model);
  * through a Latin-1-only core X font, so no UTF-8 here). */
 void weather_forecast_fill_placeholder(DailyForecast days[FORECAST_DAYS]);
 
+/* Fills `hourly` with HOURLY_SLOTS placeholder entries meaning "no data
+ * yet": NAN temperature, weather_code -1, and an empty hour_label. */
+void weather_hourly_fill_placeholder(HourlySlot hourly[HOURLY_SLOTS]);
+
 void weather_model_set(WeatherModel *model, const char *location, const DailyForecast *days,
-                        double current_temperature_c);
+                        const HourlySlot *hourly, double current_temperature_c, int current_is_day);
 
 /* Registers fn to be called (with client_data) whenever the forecast changes. */
 void weather_model_add_observer(WeatherModel *model, WeatherObserverFn fn, void *client_data);

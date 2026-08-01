@@ -22,8 +22,8 @@ static XmRenderTable create_bold_render_table(Widget context);
 #define DEFAULT_WINDOW_WIDTH  600
 #define DEFAULT_WINDOW_HEIGHT 400
 
-#define TOP_PANE_HEIGHT    80
-#define BOTTOM_PANE_HEIGHT 20
+#define TOP_PANE_HEIGHT    90
+#define BOTTOM_PANE_HEIGHT 12
 
 #define CURRENT_ICON_SIZE 64
 #define CURRENT_ICON_GAP  16
@@ -238,7 +238,7 @@ view_create(Widget toplevel, const LocationList *locations)
      * ride along, anchored to currentIcon via XmATTACH_WIDGET. */
     view->current_icon = XtVaCreateManagedWidget("currentIcon", xmLabelWidgetClass, top_pane,
                                                   XmNlabelType, XmPIXMAP,
-                                                  XmNlabelPixmap, weather_icon_for_code_64(top_pane, 0),
+                                                  XmNlabelPixmap, weather_icon_for_code_64(top_pane, 0, 1),
                                                   XmNtopAttachment, XmATTACH_FORM,
                                                   XmNtopOffset, (TOP_PANE_HEIGHT - CURRENT_ICON_SIZE) / 2,
                                                   XmNleftAttachment, XmATTACH_FORM,
@@ -341,7 +341,7 @@ make_temperature_string(double temperature_c)
 }
 
 static void
-set_current_icon(AppView *view, int weather_code)
+set_current_icon(AppView *view, int weather_code, int is_day)
 {
     if (weather_code < 0) {
         XtUnmanageChild(view->current_icon);
@@ -349,7 +349,7 @@ set_current_icon(AppView *view, int weather_code)
     }
 
     XtVaSetValues(view->current_icon, XmNlabelPixmap,
-                   weather_icon_for_code_64(view->current_icon, weather_code), NULL);
+                   weather_icon_for_code_64(view->current_icon, weather_code, is_day), NULL);
     XtManageChild(view->current_icon);
 
     /* XmLabel doesn't reliably repaint on its own when only XmNlabelPixmap
@@ -361,7 +361,7 @@ set_current_icon(AppView *view, int weather_code)
 
 void
 view_set_forecast(AppView *view, const char *location, const DailyForecast *days,
-                   double current_temperature_c)
+                   const HourlySlot *hourly, double current_temperature_c, int current_is_day)
 {
     XmString location_str = XmStringCreateLocalized((char *)location);
     XmString temperature_str = make_temperature_string(current_temperature_c);
@@ -374,9 +374,14 @@ view_set_forecast(AppView *view, const char *location, const DailyForecast *days
     XmStringFree(location_str);
     XmStringFree(temperature_str);
 
-    set_current_icon(view, days[0].weather_code);
+    /* hourly[0] is the "Now" slot (matched to current_weather.time in
+     * weather_client.c), so it reflects the current hour's condition --
+     * days[0] is a whole-day summary and can disagree (e.g. "showers"
+     * for the day even during a currently-clear hour). */
+    set_current_icon(view, hourly[0].weather_code, current_is_day);
 
     daily_forecast_view_set_forecast(view->daily_forecast_view, days);
+    hourly_forecast_view_set_forecast(view->hourly_forecast_view, hourly);
 }
 
 void
@@ -459,7 +464,7 @@ view_show_about_dialog(AppView *view)
 
         icon_label = XtVaCreateManagedWidget("aboutIcon", xmLabelWidgetClass, view->about_dialog,
                                               XmNlabelType, XmPIXMAP,
-                                              XmNlabelPixmap, weather_icon_for_code_64(view->about_dialog, 0),
+                                              XmNlabelPixmap, weather_icon_for_code_64(view->about_dialog, 0, 1),
                                               XmNtopAttachment, XmATTACH_FORM,
                                               XmNtopOffset, 20,
                                               XmNleftAttachment, XmATTACH_FORM,

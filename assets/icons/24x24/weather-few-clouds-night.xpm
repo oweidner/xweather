@@ -1,0 +1,33 @@
+/* XPM */
+static const char *weather_few_clouds_night[] = {
+/* columns rows colors chars-per-pixel */
+"24 24 3 1 ",
+"  c #BDBEC4",
+". c #E2E2E4",
+"X c None",
+/* pixels */
+"XXXXXXXXXXXXXXXXXXXXXXXX",
+"XXXXXXXXX XXXXXXXXXXXXXX",
+"XXXXXXX...XXXXXXXXXXXXXX",
+"XXXXX ....XXXXXXXXXXXXXX",
+"XXXX .... XXXXXXXXXXXXXX",
+"XXX ..... XXXXXXXXXXXXXX",
+"XXX......XXXXXXXXXXXXXXX",
+"XX.......XXXXXXXXXXXXXXX",
+"XX.......XXXXXXXXXXXXXXX",
+"X ....... XXXXXXXXXXXXXX",
+"X........ XXXXXXXXXXXXXX",
+"X.........XXXXXXXXXXXXXX",
+"X......... XXXXXXXXXXXXX",
+"X..........XXXXXXXXXXXXX",
+"X .........XXXXXXXXXXXXX",
+"XX........XX ... XXXXXXX",
+"XX....... X .....   XXXX",
+"XXX......X ..........XXX",
+"XXX .... X .......... XX",
+"XXXX ..XX  ........... X",
+"XXXXX XX............... ",
+"XXXXXXX ................",
+"XXXXXXX ................",
+"XXXXXXXX ..............X"
+};

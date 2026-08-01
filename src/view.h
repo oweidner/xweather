@@ -40,7 +40,7 @@ void     view_destroy(AppView *view);
 
 /* current_temperature_c is NAN to indicate no reading is available. */
 void view_set_forecast(AppView *view, const char *location, const DailyForecast *days,
-                        double current_temperature_c);
+                        const HourlySlot *hourly, double current_temperature_c, int current_is_day);
 void view_set_window_title(AppView *view, const char *location, double current_temperature_c);
 void view_show_about_dialog(AppView *view);
 

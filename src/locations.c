@@ -52,7 +52,9 @@ location_list_add(LocationList *list, const char *name, const char *query)
      * current_temperature_c must be NAN (not 0.0) since the async controller
      * now displays this entry's data immediately, before any fetch completes. */
     weather_forecast_fill_placeholder(entry->days);
+    weather_hourly_fill_placeholder(entry->hourly);
     entry->current_temperature_c = NAN;
+    entry->current_is_day = 1;
 
     list->count++;
 }
@@ -71,12 +73,15 @@ location_list_get(const LocationList *list, int index)
 
 void
 location_list_set_data(LocationList *list, int index, const DailyForecast *days,
-                        double current_temperature_c)
+                        const HourlySlot *hourly, double current_temperature_c,
+                        int current_is_day)
 {
     Location *entry = &list->entries[index];
 
     memcpy(entry->days, days, sizeof(entry->days));
+    memcpy(entry->hourly, hourly, sizeof(entry->hourly));
     entry->current_temperature_c = current_temperature_c;
+    entry->current_is_day = current_is_day;
     entry->has_data = 1;
     entry->last_updated = time(NULL);
 }

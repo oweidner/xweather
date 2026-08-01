@@ -17,6 +17,11 @@
  * go stale while the app just sits open. */
 #define REFRESH_INTERVAL_MS (30UL * 60UL * 1000UL)
 
+/* Redraws the "Updated ..." status text on this interval (without fetching
+ * anything), so it keeps ticking up between actual refreshes instead of
+ * sitting frozen at whatever it said right after the last fetch. */
+#define STATUS_TICK_INTERVAL_MS (30UL * 1000UL)
+
 /* Bundles what the location-item callback (and the fetch-completion
  * callback) needs, since XtAddCallback/FetchCompletionFn only carry a
  * single client_data pointer. There is only ever one controller instance
@@ -30,17 +35,20 @@ typedef struct {
     AppView      *view;
     FetchManager *fetch_mgr;
     int           selected_index; /* -1 until the first controller_select_location() */
+    int           selected_has_error; /* set while the selected location's last fetch
+                                        * attempt failed, so on_status_tick() knows to
+                                        * leave the "Unable to fetch ..." message alone */
 } LocationCallbackContext;
 
 static LocationCallbackContext *g_ctx = NULL;
 
 static void
-on_weather_changed(const char *location, const DailyForecast *days, double current_temperature_c,
-                    void *client_data)
+on_weather_changed(const char *location, const DailyForecast *days, const HourlySlot *hourly,
+                    double current_temperature_c, int current_is_day, void *client_data)
 {
     AppView *view = (AppView *)client_data;
 
-    view_set_forecast(view, location, days, current_temperature_c);
+    view_set_forecast(view, location, days, hourly, current_temperature_c, current_is_day);
 }
 
 static void
@@ -97,6 +105,7 @@ static void
 set_error_state(WeatherModel *model)
 {
     DailyForecast error_days[FORECAST_DAYS];
+    HourlySlot    error_hourly[HOURLY_SLOTS];
     int           i;
 
     memset(error_days, 0, sizeof(error_days));
@@ -107,7 +116,9 @@ set_error_state(WeatherModel *model)
     }
     snprintf(error_days[0].date_label, sizeof(error_days[0].date_label), "No data");
 
-    weather_model_set(model, "Unable to fetch weather data", error_days, NAN);
+    weather_hourly_fill_placeholder(error_hourly);
+
+    weather_model_set(model, "Unable to fetch weather data", error_days, error_hourly, NAN, 1);
 }
 
 /* Formats `when` relative to now (e.g. "just now", "5 minutes ago",
@@ -178,7 +189,8 @@ on_fetch_complete(int index, int success, const WeatherResult *result, void *cli
     LocationCallbackContext *ctx = (LocationCallbackContext *)client_data;
 
     if (success)
-        location_list_set_data(ctx->locations, index, result->days, result->current_temperature_c);
+        location_list_set_data(ctx->locations, index, result->days, result->hourly,
+                                result->current_temperature_c, result->current_is_day);
 
     if (index != ctx->selected_index)
         return;
@@ -186,12 +198,37 @@ on_fetch_complete(int index, int success, const WeatherResult *result, void *cli
     if (success) {
         const Location *loc = location_list_get(ctx->locations, index);
 
-        weather_model_set(ctx->model, loc->name, loc->days, loc->current_temperature_c);
+        weather_model_set(ctx->model, loc->name, loc->days, loc->hourly, loc->current_temperature_c,
+                           loc->current_is_day);
         update_status(ctx->view, loc, 0);
+        ctx->selected_has_error = 0;
     } else {
         set_error_state(ctx->model);
         update_status(ctx->view, location_list_get(ctx->locations, index), 1);
+        ctx->selected_has_error = 1;
     }
+}
+
+/* Fires every STATUS_TICK_INTERVAL_MS and reschedules itself. Just redraws
+ * the "Updated ..." text for whichever location is on screen from its
+ * already-cached last_updated -- no fetch involved. Skipped while the
+ * selected location's last fetch attempt failed, so it doesn't paper over
+ * the "Unable to fetch ..." message with a stale timestamp. */
+static void
+on_status_tick(XtPointer client_data, XtIntervalId *id)
+{
+    LocationCallbackContext *ctx = (LocationCallbackContext *)client_data;
+
+    (void)id;
+
+    if (!ctx->selected_has_error && ctx->selected_index >= 0) {
+        const Location *loc = location_list_get(ctx->locations, ctx->selected_index);
+
+        if (loc->has_data)
+            update_status(ctx->view, loc, 0);
+    }
+
+    XtAppAddTimeOut(ctx->app, STATUS_TICK_INTERVAL_MS, on_status_tick, ctx);
 }
 
 /* Fires every REFRESH_INTERVAL_MS: re-fetches every location (regardless of
@@ -222,12 +259,13 @@ controller_create(XtAppContext app, WeatherModel *model, LocationList *locations
     int  i;
 
     g_ctx = malloc(sizeof(*g_ctx));
-    g_ctx->app            = app;
-    g_ctx->model          = model;
-    g_ctx->locations      = locations;
-    g_ctx->view           = view;
-    g_ctx->selected_index = -1;
-    g_ctx->fetch_mgr      = fetch_manager_create(app, on_fetch_complete, g_ctx);
+    g_ctx->app                = app;
+    g_ctx->model              = model;
+    g_ctx->locations          = locations;
+    g_ctx->view               = view;
+    g_ctx->selected_index     = -1;
+    g_ctx->selected_has_error = 0;
+    g_ctx->fetch_mgr          = fetch_manager_create(app, on_fetch_complete, g_ctx);
 
     weather_model_add_observer(model, on_weather_changed, view);
 
@@ -245,6 +283,7 @@ controller_create(XtAppContext app, WeatherModel *model, LocationList *locations
     XmAddWMProtocolCallback(view->toplevel, wm_delete_window, on_quit, NULL);
 
     XtAppAddTimeOut(app, REFRESH_INTERVAL_MS, on_refresh_timeout, g_ctx);
+    XtAppAddTimeOut(app, STATUS_TICK_INTERVAL_MS, on_status_tick, g_ctx);
 }
 
 void
@@ -252,7 +291,8 @@ controller_select_location(WeatherModel *model, LocationList *locations, int ind
 {
     const Location *loc = location_list_get(locations, index);
 
-    g_ctx->selected_index = index;
+    g_ctx->selected_index     = index;
+    g_ctx->selected_has_error = 0;
 
     /* Never blocks: shows cached data if we have it, otherwise the N/A
      * placeholder location_list_add() filled in. Always kicks off a fresh
@@ -260,7 +300,8 @@ controller_select_location(WeatherModel *model, LocationList *locations, int ind
      * in flight), so switching to a location always picks up current data
      * rather than whatever was cached at startup or last refresh.
      * on_fetch_complete() updates the model again once that finishes. */
-    weather_model_set(model, loc->name, loc->days, loc->current_temperature_c);
+    weather_model_set(model, loc->name, loc->days, loc->hourly, loc->current_temperature_c,
+                       loc->current_is_day);
     update_status(g_ctx->view, loc, 0);
 
     fetch_manager_start(g_ctx->fetch_mgr, index, loc->query);

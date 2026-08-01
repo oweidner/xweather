@@ -12,6 +12,7 @@
 #define GEOCODING_URL_FMT "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json"
 #define FORECAST_URL_FMT  "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f" \
                            "&daily=temperature_2m_max,temperature_2m_min,weathercode" \
+                           "&hourly=temperature_2m,weathercode,is_day" \
                            "&current_weather=true&timezone=auto&forecast_days=%d"
 
 struct MemoryBuffer {
@@ -155,17 +156,86 @@ done:
     return ok;
 }
 
-/* Fetches the FORECAST_DAYS-day forecast for (latitude, longitude) into
- * result->days. Returns 0 on success, -1 on failure. */
+/* Fills result->hourly[0..HOURLY_SLOTS-1] from the response's "hourly" block,
+ * starting at whichever entry matches current_weather_time's date+hour (its
+ * minutes don't necessarily land on :00 -- e.g. "19:30" -- so this compares
+ * only the "YYYY-MM-DDTHH" prefix against hourly.time entries, which are
+ * always on the hour). Falls back to the first entry if no match is found.
+ * Missing entries (running off the end of the array, which shouldn't
+ * normally happen since hourly covers the same forecast_days span as daily)
+ * are left as NAN/empty via the placeholder fill already applied by the
+ * caller. */
+static void
+fill_hourly_slots(struct json_object *root, const char *current_weather_time, WeatherResult *result)
+{
+    struct json_object *hourly, *time_arr, *temp_arr, *code_arr, *day_arr;
+    int                  count, start = 0;
+    int                  i, j;
+
+    if (!json_object_object_get_ex(root, "hourly", &hourly) ||
+        !json_object_object_get_ex(hourly, "time", &time_arr) ||
+        !json_object_object_get_ex(hourly, "temperature_2m", &temp_arr) ||
+        !json_object_object_get_ex(hourly, "weathercode", &code_arr) ||
+        !json_object_object_get_ex(hourly, "is_day", &day_arr)) {
+        fprintf(stderr, "weather_client: forecast response missing expected hourly fields\n");
+        return;
+    }
+
+    count = json_object_array_length(time_arr);
+
+    if (current_weather_time && strlen(current_weather_time) >= 13) {
+        for (i = 0; i < count; i++) {
+            const char *slot_time = json_object_get_string(json_object_array_get_idx(time_arr, i));
+
+            if (strncmp(slot_time, current_weather_time, 13) == 0) {
+                start = i;
+                break;
+            }
+        }
+    }
+
+    for (j = 0; j < HOURLY_SLOTS; j++) {
+        int idx = start + j;
+
+        if (idx >= count)
+            break;
+
+        result->hourly[j].temperature_c = json_object_get_double(json_object_array_get_idx(temp_arr, idx));
+        result->hourly[j].weather_code  = json_object_get_int(json_object_array_get_idx(code_arr, idx));
+        result->hourly[j].is_day        = json_object_get_int(json_object_array_get_idx(day_arr, idx));
+
+        if (j == 0) {
+            snprintf(result->hourly[j].hour_label, sizeof(result->hourly[j].hour_label), "Now");
+        } else {
+            const char *slot_time = json_object_get_string(json_object_array_get_idx(time_arr, idx));
+            char        hh[3] = "00";
+
+            /* ISO "YYYY-MM-DDTHH:MM" -- HH starts at offset 11. */
+            if (strlen(slot_time) >= 13) {
+                hh[0] = slot_time[11];
+                hh[1] = slot_time[12];
+            }
+            snprintf(result->hourly[j].hour_label, sizeof(result->hourly[j].hour_label), "%s:00", hh);
+        }
+    }
+}
+
+/* Fetches the FORECAST_DAYS-day forecast and HOURLY_SLOTS-hour outlook for
+ * (latitude, longitude) into result->days/result->hourly. Returns 0 on
+ * success, -1 on failure. */
 static int
 fetch_daily_forecast(CURL *curl, double latitude, double longitude, WeatherResult *result)
 {
     char                url[350];
     char               *json_text;
     struct json_object *root, *daily, *time_arr, *max_arr, *min_arr, *code_arr;
-    struct json_object *current, *temp_obj;
+    struct json_object *current, *temp_obj, *current_time_obj, *current_is_day_obj;
+    const char         *current_weather_time = NULL;
     int                 ok = -1;
     int                 i;
+
+    weather_hourly_fill_placeholder(result->hourly);
+    result->current_is_day = 1;
 
     snprintf(url, sizeof(url), FORECAST_URL_FMT, latitude, longitude, FORECAST_DAYS);
 
@@ -203,10 +273,16 @@ fetch_daily_forecast(CURL *curl, double latitude, double longitude, WeatherResul
     if (json_object_object_get_ex(root, "current_weather", &current) &&
         json_object_object_get_ex(current, "temperature", &temp_obj)) {
         result->current_temperature_c = json_object_get_double(temp_obj);
+        if (json_object_object_get_ex(current, "time", &current_time_obj))
+            current_weather_time = json_object_get_string(current_time_obj);
+        if (json_object_object_get_ex(current, "is_day", &current_is_day_obj))
+            result->current_is_day = json_object_get_int(current_is_day_obj);
     } else {
         fprintf(stderr, "weather_client: forecast response missing current_weather.temperature\n");
         result->current_temperature_c = NAN;
     }
+
+    fill_hourly_slots(root, current_weather_time, result);
 
     ok = 0;
 

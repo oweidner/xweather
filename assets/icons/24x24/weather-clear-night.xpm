@@ -1,0 +1,33 @@
+/* XPM */
+static const char *weather_clear_night[] = {
+/* columns rows colors chars-per-pixel */
+"24 24 3 1 ",
+"  c #BDBFC6",
+". c #EAEAF1",
+"X c None",
+/* pixels */
+"XXXXXXXXXXXXXXXXXXXXXXXX",
+"XXXXXXXXX XXXXXXXXXXXXXX",
+"XXXXXXX ..XXXXXXXXXXXXXX",
+"XXXXX ... XXXXXXXXXXXXXX",
+"XXXX .... XXXXXXXXXXXXXX",
+"XXX .....XXXXXXXXXXXXXXX",
+"XXX......XXXXXXXXXXXXXXX",
+"XX ......XXXXXXXXXXXXXXX",
+"XX.......XXXXXXXXXXXXXXX",
+"X ....... XXXXXXXXXXXXXX",
+"X ....... XXXXXXXXXXXXXX",
+"X ........XXXXXXXXXXXXXX",
+"X ........ XXXXXXXXXXXXX",
+"X .........XXXXXXXXXXXXX",
+"X ......... XXXXXXXXXXXX",
+"XX.......... XXXXXXXXXXX",
+"XX ..........XXXXXXXXXXX",
+"XXX........... XXXXXXXXX",
+"XXX ........... XXXXXXXX",
+"XXXX ............. XXXXX",
+"XXXXX ............ XXXXX",
+"XXXXXXX ........ XXXXXXX",
+"XXXXXXXXX      XXXXXXXXX",
+"XXXXXXXXXXXXXXXXXXXXXXXX"
+};

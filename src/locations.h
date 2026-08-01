@@ -13,7 +13,9 @@ typedef struct {
     char          query[96]; /* sent to the geocoding API; may need accents
                                * or other characters `name` can't carry */
     DailyForecast days[FORECAST_DAYS];
+    HourlySlot    hourly[HOURLY_SLOTS];
     double        current_temperature_c; /* meaningless until has_data is set */
+    int           current_is_day; /* meaningless until has_data is set */
     int           has_data; /* 0 until weather data has been fetched for this location */
     time_t        last_updated; /* wall-clock time of the last successful fetch;
                                   * meaningless until has_data is set */
@@ -34,6 +36,7 @@ const Location  *location_list_get(const LocationList *list, int index);
 /* Stores fetched weather data for the entry at `index` and marks it as
  * having data (see Location.has_data). */
 void location_list_set_data(LocationList *list, int index, const DailyForecast *days,
-                             double current_temperature_c);
+                             const HourlySlot *hourly, double current_temperature_c,
+                             int current_is_day);
 
 #endif /* LOCATIONS_H */

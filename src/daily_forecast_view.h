@@ -8,9 +8,9 @@
 typedef struct DailyForecastView DailyForecastView;
 
 /* Builds a FORECAST_DAYS-column forecast panel as a managed child of
- * `parent`, filling it (attached on all four sides), with vertical
- * separators between columns. Each card's background is a darker shade of
- * `parent`'s own background, computed and applied internally. */
+ * `parent`, filling it (attached on all four sides). Each column is a
+ * DailyDataTile (see daily_data_tile.h), which owns its own card styling,
+ * background, and icon selection. */
 DailyForecastView *daily_forecast_view_create(Widget parent);
 void                daily_forecast_view_destroy(DailyForecastView *view);
 

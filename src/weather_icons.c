@@ -14,10 +14,13 @@ typedef enum {
     ICON_SHOWERS,
     ICON_SNOW,
     ICON_STORM,
+    ICON_CLEAR_NIGHT,
+    ICON_FEW_CLOUDS_NIGHT,
     ICON_COUNT
 } IconKind;
 
 typedef enum {
+    ICON_SIZE_24,
     ICON_SIZE_32,
     ICON_SIZE_64,
     ICON_SIZE_COUNT
@@ -26,9 +29,25 @@ typedef enum {
 /* Pre-converted from the GNOME Weather app's own "small" icon variant
  * (package gnome-weather, /usr/share/icons/hicolor/scalable/status/weather-*
  * -small.svg; GPL-2+, see /usr/share/doc/gnome-weather/copyright), with a
- * transparent ("None") background. Assumes the app is run from the project
- * root, matching how this project is built. */
+ * transparent ("None") background. The 24x24 set is a plain resize of the
+ * 32x32 one (via ImageMagick), not a separate re-render. Only "clear" and
+ * "few clouds" have night variants (rendered from weather-*-night-small.svg
+ * in the same source set) -- every other condition looks the same after
+ * dark, so there's no ICON_*_NIGHT for fog/overcast/showers/snow/storm.
+ * Assumes the app is run from the project root, matching how this project
+ * is built. */
 static const char *icon_files[ICON_SIZE_COUNT][ICON_COUNT] = {
+    [ICON_SIZE_24] = {
+        "assets/icons/24x24/weather-clear.xpm",
+        "assets/icons/24x24/weather-few-clouds.xpm",
+        "assets/icons/24x24/weather-overcast.xpm",
+        "assets/icons/24x24/weather-fog.xpm",
+        "assets/icons/24x24/weather-showers.xpm",
+        "assets/icons/24x24/weather-snow.xpm",
+        "assets/icons/24x24/weather-storm.xpm",
+        "assets/icons/24x24/weather-clear-night.xpm",
+        "assets/icons/24x24/weather-few-clouds-night.xpm",
+    },
     [ICON_SIZE_32] = {
         "assets/icons/32x32/weather-clear.xpm",
         "assets/icons/32x32/weather-few-clouds.xpm",
@@ -37,6 +56,8 @@ static const char *icon_files[ICON_SIZE_COUNT][ICON_COUNT] = {
         "assets/icons/32x32/weather-showers.xpm",
         "assets/icons/32x32/weather-snow.xpm",
         "assets/icons/32x32/weather-storm.xpm",
+        "assets/icons/32x32/weather-clear-night.xpm",
+        "assets/icons/32x32/weather-few-clouds-night.xpm",
     },
     [ICON_SIZE_64] = {
         "assets/icons/64x64/weather-clear.xpm",
@@ -46,6 +67,8 @@ static const char *icon_files[ICON_SIZE_COUNT][ICON_COUNT] = {
         "assets/icons/64x64/weather-showers.xpm",
         "assets/icons/64x64/weather-snow.xpm",
         "assets/icons/64x64/weather-storm.xpm",
+        "assets/icons/64x64/weather-clear-night.xpm",
+        "assets/icons/64x64/weather-few-clouds-night.xpm",
     },
 };
 
@@ -67,14 +90,15 @@ typedef struct {
 static IconCacheEntry icon_cache[MAX_ICON_CACHE_ENTRIES];
 static int            icon_cache_count = 0;
 
-/* Maps an Open-Meteo/WMO daily weathercode to an icon. See
+/* Maps an Open-Meteo/WMO daily weathercode to an icon, picking the night
+ * variant for "clear"/"few clouds" when is_day is false. See
  * https://open-meteo.com/en/docs for the full code table. */
 static IconKind
-icon_kind_for_weather_code(int code)
+icon_kind_for_weather_code(int code, int is_day)
 {
     switch (code) {
-    case 0:                                      return ICON_CLEAR;
-    case 1: case 2:                               return ICON_FEW_CLOUDS;
+    case 0:                                      return is_day ? ICON_CLEAR : ICON_CLEAR_NIGHT;
+    case 1: case 2:                               return is_day ? ICON_FEW_CLOUDS : ICON_FEW_CLOUDS_NIGHT;
     case 3:                                       return ICON_OVERCAST;
     case 45: case 48:                              return ICON_FOG;
     case 51: case 53: case 55: case 56: case 57:
@@ -83,7 +107,7 @@ icon_kind_for_weather_code(int code)
     case 71: case 73: case 75: case 77:
     case 85: case 86:                              return ICON_SNOW;
     case 95: case 96: case 99:                     return ICON_STORM;
-    default:                                       return ICON_CLEAR;
+    default:                                       return is_day ? ICON_CLEAR : ICON_CLEAR_NIGHT;
     }
 }
 
@@ -165,19 +189,28 @@ get_icon_pixmap(Widget context, IconSize size, IconKind kind)
 }
 
 Pixmap
-weather_icon_for_code(Widget context, int weather_code)
+weather_icon_for_code_24(Widget context, int weather_code, int is_day)
 {
     if (weather_code < 0)
         return XmUNSPECIFIED_PIXMAP;
 
-    return get_icon_pixmap(context, ICON_SIZE_32, icon_kind_for_weather_code(weather_code));
+    return get_icon_pixmap(context, ICON_SIZE_24, icon_kind_for_weather_code(weather_code, is_day));
 }
 
 Pixmap
-weather_icon_for_code_64(Widget context, int weather_code)
+weather_icon_for_code(Widget context, int weather_code, int is_day)
 {
     if (weather_code < 0)
         return XmUNSPECIFIED_PIXMAP;
 
-    return get_icon_pixmap(context, ICON_SIZE_64, icon_kind_for_weather_code(weather_code));
+    return get_icon_pixmap(context, ICON_SIZE_32, icon_kind_for_weather_code(weather_code, is_day));
+}
+
+Pixmap
+weather_icon_for_code_64(Widget context, int weather_code, int is_day)
+{
+    if (weather_code < 0)
+        return XmUNSPECIFIED_PIXMAP;
+
+    return get_icon_pixmap(context, ICON_SIZE_64, icon_kind_for_weather_code(weather_code, is_day));
 }
