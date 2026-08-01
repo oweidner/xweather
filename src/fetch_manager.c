@@ -175,6 +175,12 @@ fetch_manager_start(FetchManager *mgr, int index, const char *query)
     pthread_attr_destroy(&attr);
 }
 
+void
+fetch_manager_stop(FetchManager *mgr)
+{
+    XtRemoveInput(mgr->input_id);
+}
+
 /* The XtAppAddInput callback: runs on the Xt main thread whenever the pipe
  * has data. Drains it (a wakeup, not a message -- byte count is unrelated
  * to completion count) then scans every slot for completions, so it's

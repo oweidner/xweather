@@ -25,4 +25,13 @@ FetchManager *fetch_manager_create(XtAppContext app, FetchCompletionFn on_comple
  * from the Xt main thread. */
 void fetch_manager_start(FetchManager *mgr, int index, const char *query);
 
+/* Stops listening for this manager's background completions -- used when
+ * replacing it wholesale (e.g. after the location list is rebuilt from
+ * scratch). Any worker thread still finishing writes into this now-
+ * abandoned instance harmlessly, since nothing reads it anymore. Does not
+ * free `mgr`: it has no matching destroy, since its detached worker
+ * threads can't be safely joined or cancelled -- the safe move is to stop
+ * listening and leak it, not free it out from under them. */
+void fetch_manager_stop(FetchManager *mgr);
+
 #endif /* FETCH_MANAGER_H */

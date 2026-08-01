@@ -16,9 +16,7 @@
 # API to resolve coordinates; if omitted, <display name> is used for both.
 # Give a separate <geocoding query> when the place name needs accents or
 # other characters the UI labels can't render, e.g. "Candarli|Çandarlı".
-#
-# If no "location" entries are present, xweather falls back to a small
-# built-in default list.
+
 
 location = Aachen
 location = Apricale

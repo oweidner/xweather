@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <X11/Shell.h>
 #include <X11/xpm.h>
 #include <Xm/Xm.h>
 #include <Xm/MainW.h>
@@ -15,6 +14,7 @@
 #include <Xm/ToggleB.h>
 #include <Xm/Form.h>
 
+#include "location_manager_view.h"
 #include "view.h"
 #include "weather_icons.h"
 
@@ -68,6 +68,27 @@ set_wm_icon(Widget toplevel)
                   XtNiconPixmap, icon_pixmap,
                   XtNiconMask, icon_mask,
                   NULL);
+}
+
+/* Fills view->location_items[] (and view->num_location_items) from
+ * `locations`'s current entries, as children of view->location_menu.
+ * Assumes location_menu is already set and any previous items have already
+ * been destroyed. Shared by view_create() and view_rebuild_location_menu(). */
+static void
+build_location_items(AppView *view, const LocationList *locations)
+{
+    int i;
+
+    view->num_location_items = location_list_count(locations);
+    for (i = 0; i < view->num_location_items; i++) {
+        const Location *loc = location_list_get(locations, i);
+
+        view->location_items[i] = XtVaCreateManagedWidget(loc->name, xmToggleButtonWidgetClass,
+                                                            view->location_menu,
+                                                            XmNindicatorType, XmONE_OF_MANY,
+                                                            XmNset, i == 0,
+                                                            NULL);
+    }
 }
 
 AppView *
@@ -174,20 +195,8 @@ view_create(Widget toplevel, const LocationList *locations)
 
     XtVaCreateManagedWidget("locationSeparator", xmSeparatorWidgetClass, location_menu, NULL);
 
-    view->num_location_items = location_list_count(locations);
-    {
-        int i;
-
-        for (i = 0; i < view->num_location_items; i++) {
-            const Location *loc = location_list_get(locations, i);
-
-            view->location_items[i] = XtVaCreateManagedWidget(loc->name, xmToggleButtonWidgetClass,
-                                                                location_menu,
-                                                                XmNindicatorType, XmONE_OF_MANY,
-                                                                XmNset, i == 0,
-                                                                NULL);
-        }
-    }
+    view->location_menu = location_menu;
+    build_location_items(view, locations);
 
     help_menu = XmCreatePulldownMenu(menu_bar, "helpMenu", NULL, 0);
     help_cascade = XtVaCreateManagedWidget("Help", xmCascadeButtonWidgetClass, menu_bar,
@@ -327,6 +336,8 @@ view_create(Widget toplevel, const LocationList *locations)
     view->hourly_forecast_view = hourly_forecast_view_create(middle_pane);
     XtUnmanageChild(hourly_forecast_view_widget(view->hourly_forecast_view)); /* 5-Day Forecast is the default */
 
+    view->location_manager_view = location_manager_view_create(toplevel);
+
     XtManageChild(work_area);
     XtManageChild(outer_form);
 
@@ -340,6 +351,7 @@ view_destroy(AppView *view)
 {
     daily_forecast_view_destroy(view->daily_forecast_view);
     hourly_forecast_view_destroy(view->hourly_forecast_view);
+    location_manager_view_destroy(view->location_manager_view);
     free(view);
 }
 
@@ -578,4 +590,21 @@ view_show_about_dialog(AppView *view)
     }
 
     XtManageChild(view->about_dialog);
+}
+
+void
+view_show_manage_locations_window(AppView *view, const LocationList *locations)
+{
+    location_manager_view_show(view->location_manager_view, locations);
+}
+
+void
+view_rebuild_location_menu(AppView *view, const LocationList *locations)
+{
+    int i;
+
+    for (i = 0; i < view->num_location_items; i++)
+        XtDestroyWidget(view->location_items[i]);
+
+    build_location_items(view, locations);
 }

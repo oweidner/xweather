@@ -11,11 +11,6 @@
 #define MAX_CONFIG_LOCATIONS 32
 #define CONFIG_LINE_MAX      256
 
-typedef struct {
-    char name[64];
-    char query[96];
-} ConfigLocation;
-
 struct AppConfig {
     ConfigLocation locations[MAX_CONFIG_LOCATIONS];
     int            location_count;
@@ -202,6 +197,40 @@ write_default_config(const char *path)
 
     fclose(f);
     return 0;
+}
+
+void
+config_save(const ConfigLocation *entries, int count)
+{
+    char  path[512];
+    char  dir[512];
+    int   i;
+    FILE *f;
+
+    resolve_config_path(path, sizeof(path));
+
+    dir_of_path(path, dir, sizeof(dir));
+    if (mkdir_p(dir) != 0) {
+        fprintf(stderr, "config: failed to create directory \"%s\": %s\n", dir, strerror(errno));
+        return;
+    }
+
+    f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "config: failed to write \"%s\": %s\n", path, strerror(errno));
+        return;
+    }
+
+    fprintf(f, "# xweather configuration -- see docs/config.sample for the full format\n");
+    for (i = 0; i < count; i++) {
+        if (strcmp(entries[i].name, entries[i].query) == 0)
+            fprintf(f, "location = %s\n", entries[i].name);
+        else
+            fprintf(f, "location = %s|%s\n", entries[i].name, entries[i].query);
+    }
+
+    fclose(f);
+    fprintf(stderr, "config: saved %d location(s) to \"%s\"\n", count, path);
 }
 
 AppConfig *

@@ -8,6 +8,7 @@
 #include <Xm/Protocols.h>
 #include <Xm/ToggleB.h>
 
+#include "config.h"
 #include "controller.h"
 #include "fetch_manager.h"
 #include "weather_client.h"
@@ -66,6 +67,16 @@ on_about(Widget w, XtPointer client_data, XtPointer call_data)
     (void)w;
     (void)call_data;
     view_show_about_dialog((AppView *)client_data);
+}
+
+static void
+on_manage_locations(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    LocationCallbackContext *ctx = (LocationCallbackContext *)client_data;
+
+    (void)w;
+    (void)call_data;
+    view_show_manage_locations_window(ctx->view, ctx->locations);
 }
 
 static void
@@ -252,11 +263,59 @@ on_refresh_timeout(XtPointer client_data, XtIntervalId *id)
     XtAppAddTimeOut(ctx->app, REFRESH_INTERVAL_MS, on_refresh_timeout, ctx);
 }
 
+/* Wires XmNvalueChangedCallback onto every current view->location_items[]
+ * entry. Shared by controller_create() (startup) and
+ * on_manage_locations_apply() (after a rebuild), since the widgets are
+ * destroyed and recreated by view_rebuild_location_menu() each time. */
+static void
+wire_location_items(AppView *view)
+{
+    int i;
+
+    for (i = 0; i < view->num_location_items; i++)
+        XtAddCallback(view->location_items[i], XmNvalueChangedCallback, on_location_selected, g_ctx);
+}
+
+/* Fired by the manage-locations window's Apply button with the staged
+ * (name, query) list. Rebuilds the app's location state from scratch --
+ * fresh LocationList, fresh FetchManager, reselect index 0, refetch
+ * everything -- exactly like a cold startup (see main.c), rather than
+ * trying to incrementally patch the running LocationList/FetchManager
+ * (which identify in-flight fetches purely by array index with no
+ * cancellation, so an incremental edit could misattribute a stale fetch to
+ * the wrong location after add/remove). The old LocationList and
+ * FetchManager are intentionally leaked, not freed: nothing else in this
+ * codebase frees them either (they only ever lived until process exit),
+ * and freeing the old FetchManager out from under its detached worker
+ * threads would be a use-after-free -- fetch_manager_stop() just stops
+ * listening to it. */
+static void
+on_manage_locations_apply(const ConfigLocation *entries, int count, void *user_data)
+{
+    LocationCallbackContext *ctx = (LocationCallbackContext *)user_data;
+    LocationList             *new_locations = location_list_create();
+    int                       i;
+
+    config_save(entries, count);
+
+    for (i = 0; i < count; i++)
+        location_list_add(new_locations, entries[i].name, entries[i].query);
+
+    fetch_manager_stop(ctx->fetch_mgr);
+    ctx->fetch_mgr = fetch_manager_create(ctx->app, on_fetch_complete, ctx);
+    ctx->locations = new_locations;
+
+    view_rebuild_location_menu(ctx->view, ctx->locations);
+    wire_location_items(ctx->view);
+
+    controller_select_location(ctx->model, ctx->locations, 0);
+    controller_prefetch_all();
+}
+
 void
 controller_create(XtAppContext app, WeatherModel *model, LocationList *locations, AppView *view)
 {
     Atom wm_delete_window;
-    int  i;
 
     g_ctx = malloc(sizeof(*g_ctx));
     g_ctx->app                = app;
@@ -271,11 +330,12 @@ controller_create(XtAppContext app, WeatherModel *model, LocationList *locations
 
     XtAddCallback(view->quit_item, XmNactivateCallback, on_quit, NULL);
     XtAddCallback(view->about_item, XmNactivateCallback, on_about, view);
+    XtAddCallback(view->manage_locations_item, XmNactivateCallback, on_manage_locations, g_ctx);
     XtAddCallback(view->five_day_forecast_item, XmNvalueChangedCallback, on_view_selected, view);
     XtAddCallback(view->hourly_forecast_item, XmNvalueChangedCallback, on_view_selected, view);
 
-    for (i = 0; i < view->num_location_items; i++)
-        XtAddCallback(view->location_items[i], XmNvalueChangedCallback, on_location_selected, g_ctx);
+    wire_location_items(view);
+    location_manager_view_set_apply_callback(view->location_manager_view, on_manage_locations_apply, g_ctx);
 
     /* Make the window manager's close button behave the same as File -> Quit. */
     wm_delete_window = XmInternAtom(XtDisplay(view->toplevel), "WM_DELETE_WINDOW", False);
