@@ -7,6 +7,7 @@ set -e
 
 PREFIX=/usr/local
 CC=${CC:-cc}
+OS=$(uname -s)
 
 for arg in "$@"; do
     case "$arg" in
@@ -68,13 +69,49 @@ MOTIF_CFLAGS=""
 MOTIF_LIBS="-lXm -lXt -lX11"
 FOUND=""
 
-# Candidate include paths to try, in order of preference. Most distros
-# (incl. Ubuntu/Debian with libmotif-dev) resolve Xm/Xt/X11 from the
-# default search paths, so an empty candidate is tried first.
+if [ "$OS" = "Darwin" ]; then
+    # macOS has no system Motif/X11 dev files; we rely on Homebrew for the
+    # client libraries (Motif itself, plus its Xt/Xp/X11 dependencies) and
+    # on XQuartz only to provide the running X server at runtime.
+    if ! command -v brew >/dev/null 2>&1; then
+        echo "configure: error: Homebrew not found (required for Motif/X11 on macOS)." >&2
+        echo "configure: install it from https://brew.sh, then run:" >&2
+        echo "configure:   brew install openmotif json-c libxpm" >&2
+        exit 1
+    fi
+    BREW_PREFIX=$(brew --prefix)
+    MOTIF_PREFIX=$(brew --prefix openmotif 2>/dev/null || true)
+    XT_PREFIX=$(brew --prefix libxt 2>/dev/null || true)
+    XP_PREFIX=$(brew --prefix libxp 2>/dev/null || true)
+    X11_PREFIX=$(brew --prefix libx11 2>/dev/null || true)
+    XPM_PREFIX=$(brew --prefix libxpm 2>/dev/null || true)
+
+    if [ -z "$MOTIF_PREFIX" ] || [ -z "$XT_PREFIX" ] || [ -z "$XP_PREFIX" ] || [ -z "$X11_PREFIX" ]; then
+        echo "configure: error: required Homebrew packages not found." >&2
+        echo "configure: install with: brew install openmotif json-c libxpm" >&2
+        exit 1
+    fi
+
+    MAC_MOTIF_CFLAGS="-I$BREW_PREFIX/include -I$MOTIF_PREFIX/include -I$XT_PREFIX/include -I$XP_PREFIX/include -I$X11_PREFIX/include"
+    MAC_MOTIF_LIBDIRS="-L$MOTIF_PREFIX/lib -L$XT_PREFIX/lib -L$XP_PREFIX/lib -L$X11_PREFIX/lib"
+    set -- "$MAC_MOTIF_CFLAGS"
+else
+    # Candidate include paths to try, in order of preference. Most distros
+    # (incl. Ubuntu/Debian with libmotif-dev) resolve Xm/Xt/X11 from the
+    # default search paths, so an empty candidate is tried first.
+    set -- "" "-I/usr/include/X11" "-I/usr/X11R6/include"
+fi
+
 info "for Motif (Xm/Xt/X11) headers and libraries"
-for cflags in "" "-I/usr/include/X11" "-I/usr/X11R6/include"; do
-    if "$CC" $cflags -o "$TMPDIR/xm_test" "$TMPDIR/xm_test.c" $MOTIF_LIBS 2>>config.log; then
+for cflags in "$@"; do
+    if [ "$OS" = "Darwin" ]; then
+        libs="$MAC_MOTIF_LIBDIRS $MOTIF_LIBS"
+    else
+        libs="$MOTIF_LIBS"
+    fi
+    if "$CC" $cflags -o "$TMPDIR/xm_test" "$TMPDIR/xm_test.c" $libs 2>>config.log; then
         MOTIF_CFLAGS="$cflags"
+        MOTIF_LIBS="$libs"
         FOUND=1
         break
     fi
@@ -83,7 +120,11 @@ done
 if [ -z "$FOUND" ]; then
     no
     echo "configure: error: could not compile/link against Motif." >&2
-    echo "configure: install development headers, e.g.: sudo apt install libmotif-dev" >&2
+    if [ "$OS" = "Darwin" ]; then
+        echo "configure: install with: brew install openmotif json-c libxpm" >&2
+    else
+        echo "configure: install development headers, e.g.: sudo apt install libmotif-dev" >&2
+    fi
     echo "configure: see config.log for details" >&2
     exit 1
 fi
@@ -112,7 +153,11 @@ info "for json-c"
 if ! pkg-config --exists json-c 2>>config.log; then
     no
     echo "configure: error: json-c development files not found." >&2
-    echo "configure: install with: sudo apt install libjson-c-dev" >&2
+    if [ "$OS" = "Darwin" ]; then
+        echo "configure: install with: brew install json-c" >&2
+    else
+        echo "configure: install with: sudo apt install libjson-c-dev" >&2
+    fi
     exit 1
 fi
 ok
@@ -124,15 +169,33 @@ cat > "$TMPDIR/xpm_test.c" <<'EOF'
 int main(void) { return XpmLibraryVersion() >= 0 ? 0 : 1; }
 EOF
 
+if [ "$OS" = "Darwin" ]; then
+    if [ -z "$XPM_PREFIX" ]; then
+        echo "configure: error: required Homebrew package 'libxpm' not found." >&2
+        echo "configure: install with: brew install libxpm" >&2
+        exit 1
+    fi
+    XPM_CFLAGS="-I$BREW_PREFIX/include -I$XPM_PREFIX/include -I$X11_PREFIX/include"
+    XPM_LIBDIRS="-L$XPM_PREFIX/lib $MAC_MOTIF_LIBDIRS"
+else
+    XPM_CFLAGS=""
+    XPM_LIBDIRS=""
+fi
+
 info "for libXpm"
-if ! "$CC" -o "$TMPDIR/xpm_test" "$TMPDIR/xpm_test.c" -lXpm -lX11 2>>config.log; then
+if ! "$CC" $XPM_CFLAGS -o "$TMPDIR/xpm_test" "$TMPDIR/xpm_test.c" $XPM_LIBDIRS -lXpm -lX11 2>>config.log; then
     no
     echo "configure: error: libXpm development files not found." >&2
-    echo "configure: install with: sudo apt install libxpm-dev" >&2
+    if [ "$OS" = "Darwin" ]; then
+        echo "configure: install with: brew install libxpm" >&2
+    else
+        echo "configure: install with: sudo apt install libxpm-dev" >&2
+    fi
     exit 1
 fi
 ok
-XPM_LIBS="-lXpm"
+MOTIF_CFLAGS="$MOTIF_CFLAGS $XPM_CFLAGS"
+XPM_LIBS="$XPM_LIBDIRS -lXpm"
 
 cat > "$TMPDIR/pthread_test.c" <<'EOF'
 #include <pthread.h>
