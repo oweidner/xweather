@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include <X11/Shell.h>
+#include <X11/xpm.h>
 #include <Xm/Xm.h>
 #include <Xm/MainW.h>
 #include <Xm/RowColumn.h>
@@ -22,6 +23,13 @@ static XmRenderTable create_bold_render_table(Widget context);
 #define DEFAULT_WINDOW_WIDTH  600
 #define DEFAULT_WINDOW_HEIGHT 400
 
+/* Same 64x64 set weather_icon_for_code_64() draws from -- reused as-is
+ * (unlike those, loaded straight via Xpm rather than composited against a
+ * background) since the window manager, not us, decides what's behind the
+ * icon in a taskbar/alt-tab switcher; icon_mask is exactly what lets it clip
+ * correctly against that unknown background. */
+#define APP_ICON_FILE "assets/icons/64x64/weather-clear.xpm"
+
 #define TOP_PANE_HEIGHT    90
 #define BOTTOM_PANE_HEIGHT 12
 
@@ -37,6 +45,31 @@ static XmRenderTable create_bold_render_table(Widget context);
  * requested as part of a full font descriptor. */
 #define BOLD_FONT "-*-*-bold-r-*-*-18-*-*-*-*-*-*-*"
 
+/* Sets the window manager's icon (taskbar, alt-tab, titlebar) via the Shell
+ * widget's standard iconPixmap/iconMask resources -- these are applied by
+ * Xt when the shell is realized, so it doesn't matter that `toplevel` isn't
+ * realized yet when view_create() calls this. */
+static void
+set_wm_icon(Widget toplevel)
+{
+    Display *dpy = XtDisplay(toplevel);
+    Window   root = RootWindowOfScreen(XtScreen(toplevel));
+    Pixmap   icon_pixmap, icon_mask;
+    int      status;
+
+    status = XpmReadFileToPixmap(dpy, root, APP_ICON_FILE, &icon_pixmap, &icon_mask, NULL);
+    if (status != XpmSuccess) {
+        fprintf(stderr, "view: failed to load app icon \"%s\": %s\n",
+                APP_ICON_FILE, XpmGetErrorString(status));
+        return;
+    }
+
+    XtVaSetValues(toplevel,
+                  XtNiconPixmap, icon_pixmap,
+                  XtNiconMask, icon_mask,
+                  NULL);
+}
+
 AppView *
 view_create(Widget toplevel, const LocationList *locations)
 {
@@ -50,6 +83,8 @@ view_create(Widget toplevel, const LocationList *locations)
                   XmNwidth, DEFAULT_WINDOW_WIDTH,
                   XmNheight, DEFAULT_WINDOW_HEIGHT,
                   NULL);
+
+    set_wm_icon(toplevel);
 
     view->main_window = XmCreateMainWindow(toplevel, "mainWindow", NULL, 0);
     XtManageChild(view->main_window);

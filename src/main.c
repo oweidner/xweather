@@ -4,6 +4,7 @@
 #include <Xm/Xm.h>
 
 #include "model.h"
+#include "config.h"
 #include "locations.h"
 #include "view.h"
 #include "controller.h"
@@ -16,6 +17,7 @@ main(int argc, char **argv)
     WeatherModel *model;
     LocationList *locations;
     AppView      *view;
+    AppConfig    *config;
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -33,15 +35,29 @@ main(int argc, char **argv)
      * for the API URLs we build. */
     setlocale(LC_NUMERIC, "C");
 
+    config = config_load();
     locations = location_list_create();
-    location_list_add(locations, "Aachen", "Aachen");
-    location_list_add(locations, "Apricale", "Apricale");
-    location_list_add(locations, "Flensburg", "Flensburg");
-    /* Display name stays ASCII (our labels can't render arbitrary Unicode),
-     * but the geocoding query needs the proper Turkish spelling to resolve
-     * at all: "Candarli" alone returns zero results, "\xC3\x87andarl\xC4\xB1"
-     * (Çandarlı, UTF-8) correctly finds the İzmir Province town. */
-    location_list_add(locations, "Candarli", "\xC3\x87" "andarl" "\xC4\xB1");
+
+    if (config_location_count(config) > 0) {
+        int i;
+
+        for (i = 0; i < config_location_count(config); i++)
+            location_list_add(locations, config_location_name(config, i),
+                               config_location_query(config, i));
+    } else {
+        /* No config file (or no "location" entries in it) -- fall back to a
+         * small built-in default list. Display name stays ASCII (our labels
+         * can't render arbitrary Unicode), but the geocoding query needs the
+         * proper Turkish spelling to resolve at all: "Candarli" alone
+         * returns zero results, "\xC3\x87andarl\xC4\xB1" (Çandarlı, UTF-8)
+         * correctly finds the İzmir Province town. */
+        location_list_add(locations, "Aachen", "Aachen");
+        location_list_add(locations, "Apricale", "Apricale");
+        location_list_add(locations, "Flensburg", "Flensburg");
+        location_list_add(locations, "Candarli", "\xC3\x87" "andarl" "\xC4\xB1");
+    }
+
+    config_destroy(config);
 
     model = weather_model_create();
     view  = view_create(toplevel, locations);

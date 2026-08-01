@@ -2,7 +2,9 @@
 
 A contemporary X11/Motif weather application, inspired by [Gnome Weather](https://apps.gnome.org/Weather/). Runs great on [SGI IRIX](https://en.wikipedia.org/wiki/IRIX), MacOS, and Linux.
 
-![xweather screenshot](docs/screenshots/xweather_daily.png) ![xweather screenshot](docs/screenshots/xweather_hourly.png)
+![xweather screenshot](docs/screenshots/xweather_daily.png) 
+
+![xweather screenshot](docs/screenshots/xweather_hourly.png)
 
 ## Features
 
