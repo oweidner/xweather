@@ -24,7 +24,8 @@ typedef struct WeatherModel WeatherModel;
 
 typedef void (*WeatherObserverFn)(const char *location, const DailyForecast *days,
                                    const HourlySlot *hourly, double current_temperature_c,
-                                   int current_is_day, void *client_data);
+                                   int current_is_day, double current_wind_speed_kmh,
+                                   int current_precipitation_probability, void *client_data);
 
 WeatherModel *weather_model_create(void);
 void          weather_model_destroy(WeatherModel *model);
@@ -39,7 +40,8 @@ void weather_forecast_fill_placeholder(DailyForecast days[FORECAST_DAYS]);
 void weather_hourly_fill_placeholder(HourlySlot hourly[HOURLY_SLOTS]);
 
 void weather_model_set(WeatherModel *model, const char *location, const DailyForecast *days,
-                        const HourlySlot *hourly, double current_temperature_c, int current_is_day);
+                        const HourlySlot *hourly, double current_temperature_c, int current_is_day,
+                        double current_wind_speed_kmh, int current_precipitation_probability);
 
 /* Registers fn to be called (with client_data) whenever the forecast changes. */
 void weather_model_add_observer(WeatherModel *model, WeatherObserverFn fn, void *client_data);

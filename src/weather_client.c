@@ -12,7 +12,7 @@
 #define GEOCODING_URL_FMT "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json"
 #define FORECAST_URL_FMT  "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f" \
                            "&daily=temperature_2m_max,temperature_2m_min,weathercode" \
-                           "&hourly=temperature_2m,weathercode,is_day" \
+                           "&hourly=temperature_2m,weathercode,is_day,precipitation_probability" \
                            "&current_weather=true&timezone=auto&forecast_days=%d"
 
 struct MemoryBuffer {
@@ -168,7 +168,7 @@ done:
 static void
 fill_hourly_slots(struct json_object *root, const char *current_weather_time, WeatherResult *result)
 {
-    struct json_object *hourly, *time_arr, *temp_arr, *code_arr, *day_arr;
+    struct json_object *hourly, *time_arr, *temp_arr, *code_arr, *day_arr, *precip_arr;
     int                  count, start = 0;
     int                  i, j;
 
@@ -180,6 +180,12 @@ fill_hourly_slots(struct json_object *root, const char *current_weather_time, We
         fprintf(stderr, "weather_client: forecast response missing expected hourly fields\n");
         return;
     }
+
+    /* precipitation_probability is treated as optional -- missing it just
+     * leaves current_precipitation_probability at its placeholder -1 rather
+     * than failing the whole fetch. */
+    precip_arr = NULL;
+    json_object_object_get_ex(hourly, "precipitation_probability", &precip_arr);
 
     count = json_object_array_length(time_arr);
 
@@ -193,6 +199,10 @@ fill_hourly_slots(struct json_object *root, const char *current_weather_time, We
             }
         }
     }
+
+    if (precip_arr && start < (int)json_object_array_length(precip_arr))
+        result->current_precipitation_probability =
+            json_object_get_int(json_object_array_get_idx(precip_arr, start));
 
     for (j = 0; j < HOURLY_SLOTS; j++) {
         int idx = start + j;
@@ -229,13 +239,15 @@ fetch_daily_forecast(CURL *curl, double latitude, double longitude, WeatherResul
     char                url[350];
     char               *json_text;
     struct json_object *root, *daily, *time_arr, *max_arr, *min_arr, *code_arr;
-    struct json_object *current, *temp_obj, *current_time_obj, *current_is_day_obj;
+    struct json_object *current, *temp_obj, *current_time_obj, *current_is_day_obj, *windspeed_obj;
     const char         *current_weather_time = NULL;
     int                 ok = -1;
     int                 i;
 
     weather_hourly_fill_placeholder(result->hourly);
     result->current_is_day = 1;
+    result->current_wind_speed_kmh = NAN;
+    result->current_precipitation_probability = -1;
 
     snprintf(url, sizeof(url), FORECAST_URL_FMT, latitude, longitude, FORECAST_DAYS);
 
@@ -277,6 +289,8 @@ fetch_daily_forecast(CURL *curl, double latitude, double longitude, WeatherResul
             current_weather_time = json_object_get_string(current_time_obj);
         if (json_object_object_get_ex(current, "is_day", &current_is_day_obj))
             result->current_is_day = json_object_get_int(current_is_day_obj);
+        if (json_object_object_get_ex(current, "windspeed", &windspeed_obj))
+            result->current_wind_speed_kmh = json_object_get_double(windspeed_obj);
     } else {
         fprintf(stderr, "weather_client: forecast response missing current_weather.temperature\n");
         result->current_temperature_c = NAN;

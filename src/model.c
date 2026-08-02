@@ -18,6 +18,8 @@ struct WeatherModel {
     HourlySlot    hourly[HOURLY_SLOTS];
     double        current_temperature_c;
     int           current_is_day;
+    double        current_wind_speed_kmh;
+    int           current_precipitation_probability;
     Observer      observers[MAX_OBSERVERS];
     int           num_observers;
 };
@@ -59,6 +61,8 @@ weather_model_create(void)
     weather_hourly_fill_placeholder(model->hourly);
     model->current_temperature_c = NAN;
     model->current_is_day        = 1;
+    model->current_wind_speed_kmh = NAN;
+    model->current_precipitation_probability = -1;
 
     return model;
 }
@@ -77,13 +81,15 @@ weather_model_notify(WeatherModel *model)
     for (i = 0; i < model->num_observers; i++) {
         model->observers[i].fn(model->location, model->days, model->hourly,
                                 model->current_temperature_c, model->current_is_day,
+                                model->current_wind_speed_kmh, model->current_precipitation_probability,
                                 model->observers[i].client_data);
     }
 }
 
 void
 weather_model_set(WeatherModel *model, const char *location, const DailyForecast *days,
-                   const HourlySlot *hourly, double current_temperature_c, int current_is_day)
+                   const HourlySlot *hourly, double current_temperature_c, int current_is_day,
+                   double current_wind_speed_kmh, int current_precipitation_probability)
 {
     strncpy(model->location, location, MAX_LOCATION - 1);
     model->location[MAX_LOCATION - 1] = '\0';
@@ -91,6 +97,8 @@ weather_model_set(WeatherModel *model, const char *location, const DailyForecast
     memcpy(model->hourly, hourly, sizeof(model->hourly));
     model->current_temperature_c = current_temperature_c;
     model->current_is_day        = current_is_day;
+    model->current_wind_speed_kmh = current_wind_speed_kmh;
+    model->current_precipitation_probability = current_precipitation_probability;
     weather_model_notify(model);
 }
 

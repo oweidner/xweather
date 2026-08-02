@@ -45,11 +45,13 @@ static LocationCallbackContext *g_ctx = NULL;
 
 static void
 on_weather_changed(const char *location, const DailyForecast *days, const HourlySlot *hourly,
-                    double current_temperature_c, int current_is_day, void *client_data)
+                    double current_temperature_c, int current_is_day, double current_wind_speed_kmh,
+                    int current_precipitation_probability, void *client_data)
 {
     AppView *view = (AppView *)client_data;
 
-    view_set_forecast(view, location, days, hourly, current_temperature_c, current_is_day);
+    view_set_forecast(view, location, days, hourly, current_temperature_c, current_is_day,
+                       current_wind_speed_kmh, current_precipitation_probability);
 }
 
 static void
@@ -129,7 +131,7 @@ set_error_state(WeatherModel *model)
 
     weather_hourly_fill_placeholder(error_hourly);
 
-    weather_model_set(model, "Unable to fetch weather data", error_days, error_hourly, NAN, 1);
+    weather_model_set(model, "Unable to fetch weather data", error_days, error_hourly, NAN, 1, NAN, -1);
 }
 
 /* Formats `when` relative to now (e.g. "just now", "5 minutes ago",
@@ -201,7 +203,8 @@ on_fetch_complete(int index, int success, const WeatherResult *result, void *cli
 
     if (success)
         location_list_set_data(ctx->locations, index, result->days, result->hourly,
-                                result->current_temperature_c, result->current_is_day);
+                                result->current_temperature_c, result->current_is_day,
+                                result->current_wind_speed_kmh, result->current_precipitation_probability);
 
     if (index != ctx->selected_index)
         return;
@@ -210,7 +213,8 @@ on_fetch_complete(int index, int success, const WeatherResult *result, void *cli
         const Location *loc = location_list_get(ctx->locations, index);
 
         weather_model_set(ctx->model, loc->name, loc->days, loc->hourly, loc->current_temperature_c,
-                           loc->current_is_day);
+                           loc->current_is_day, loc->current_wind_speed_kmh,
+                           loc->current_precipitation_probability);
         update_status(ctx->view, loc, 0);
         ctx->selected_has_error = 0;
     } else {
@@ -361,7 +365,8 @@ controller_select_location(WeatherModel *model, LocationList *locations, int ind
      * rather than whatever was cached at startup or last refresh.
      * on_fetch_complete() updates the model again once that finishes. */
     weather_model_set(model, loc->name, loc->days, loc->hourly, loc->current_temperature_c,
-                       loc->current_is_day);
+                       loc->current_is_day, loc->current_wind_speed_kmh,
+                       loc->current_precipitation_probability);
     update_status(g_ctx->view, loc, 0);
 
     fetch_manager_start(g_ctx->fetch_mgr, index, loc->query);

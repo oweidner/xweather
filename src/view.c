@@ -30,7 +30,7 @@ static XmRenderTable create_bold_render_table(Widget context);
  * correctly against that unknown background. */
 #define APP_ICON_FILE "assets/icons/64x64/weather-clear.xpm"
 
-#define TOP_PANE_HEIGHT    90
+#define TOP_PANE_HEIGHT    108
 #define BOTTOM_PANE_HEIGHT 12
 
 #define CURRENT_ICON_SIZE 64
@@ -174,7 +174,7 @@ view_create(Widget toplevel, const LocationList *locations)
 
     location_menu = XmCreatePulldownMenu(menu_bar, "locationMenu", NULL, 0);
     XtVaSetValues(location_menu, XmNradioBehavior, True, XmNradioAlwaysOne, True, NULL);
-    XtVaCreateManagedWidget("Location", xmCascadeButtonWidgetClass, menu_bar,
+    XtVaCreateManagedWidget("Locations", xmCascadeButtonWidgetClass, menu_bar,
                              XmNsubMenuId, location_menu,
                              XmNmnemonic, 'L',
                              NULL);
@@ -313,6 +313,16 @@ view_create(Widget toplevel, const LocationList *locations)
         XmRenderTableFree(bold_table);
     }
 
+    /* Wind/rain summary line, plain weight, directly under the temperature. */
+    view->current_details = XtVaCreateManagedWidget("currentDetails", xmLabelWidgetClass, top_pane,
+                                                      XmNtopAttachment, XmATTACH_WIDGET,
+                                                      XmNtopWidget, view->current_temperature,
+                                                      XmNtopOffset, 6,
+                                                      XmNleftAttachment, XmATTACH_WIDGET,
+                                                      XmNleftWidget, view->current_icon,
+                                                      XmNleftOffset, CURRENT_ICON_GAP,
+                                                      NULL);
+
     bottom_pane = XtVaCreateManagedWidget("bottomPane", xmFormWidgetClass, work_area,
                                            XmNresizePolicy, XmRESIZE_NONE,
                                            XmNbottomAttachment, XmATTACH_FORM,
@@ -387,6 +397,33 @@ make_temperature_string(double temperature_c)
     return XmStringCreate(buf, XmFONTLIST_DEFAULT_TAG);
 }
 
+/* Builds the "Wind: X km/h   Rain: Y%" line, omitting either half whose
+ * reading is unavailable (NAN wind, negative precipitation probability);
+ * empty if both are unavailable. */
+static XmString
+make_details_string(double wind_speed_kmh, int precipitation_probability)
+{
+    char buf[64];
+    char wind_buf[24] = "";
+    char rain_buf[24] = "";
+
+    if (!isnan(wind_speed_kmh))
+        snprintf(wind_buf, sizeof(wind_buf), "Wind: %.0f km/h", wind_speed_kmh);
+    if (precipitation_probability >= 0)
+        snprintf(rain_buf, sizeof(rain_buf), "Rain: %d%%", precipitation_probability);
+
+    if (wind_buf[0] && rain_buf[0])
+        snprintf(buf, sizeof(buf), "%s   %s", wind_buf, rain_buf);
+    else if (wind_buf[0])
+        snprintf(buf, sizeof(buf), "%s", wind_buf);
+    else if (rain_buf[0])
+        snprintf(buf, sizeof(buf), "%s", rain_buf);
+    else
+        buf[0] = '\0';
+
+    return XmStringCreate(buf, XmFONTLIST_DEFAULT_TAG);
+}
+
 static void
 set_current_icon(AppView *view, int weather_code, int is_day)
 {
@@ -408,18 +445,22 @@ set_current_icon(AppView *view, int weather_code, int is_day)
 
 void
 view_set_forecast(AppView *view, const char *location, const DailyForecast *days,
-                   const HourlySlot *hourly, double current_temperature_c, int current_is_day)
+                   const HourlySlot *hourly, double current_temperature_c, int current_is_day,
+                   double current_wind_speed_kmh, int current_precipitation_probability)
 {
     XmString location_str = XmStringCreateLocalized((char *)location);
     XmString temperature_str = make_temperature_string(current_temperature_c);
+    XmString details_str = make_details_string(current_wind_speed_kmh, current_precipitation_probability);
 
     view_set_window_title(view, location, current_temperature_c);
 
     XtVaSetValues(view->current_location, XmNlabelString, location_str, NULL);
     XtVaSetValues(view->current_temperature, XmNlabelString, temperature_str, NULL);
+    XtVaSetValues(view->current_details, XmNlabelString, details_str, NULL);
 
     XmStringFree(location_str);
     XmStringFree(temperature_str);
+    XmStringFree(details_str);
 
     /* hourly[0] is the "Now" slot (matched to current_weather.time in
      * weather_client.c), so it reflects the current hour's condition --

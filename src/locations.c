@@ -55,6 +55,8 @@ location_list_add(LocationList *list, const char *name, const char *query)
     weather_hourly_fill_placeholder(entry->hourly);
     entry->current_temperature_c = NAN;
     entry->current_is_day = 1;
+    entry->current_wind_speed_kmh = NAN;
+    entry->current_precipitation_probability = -1;
 
     list->count++;
 }
@@ -74,7 +76,8 @@ location_list_get(const LocationList *list, int index)
 void
 location_list_set_data(LocationList *list, int index, const DailyForecast *days,
                         const HourlySlot *hourly, double current_temperature_c,
-                        int current_is_day)
+                        int current_is_day, double current_wind_speed_kmh,
+                        int current_precipitation_probability)
 {
     Location *entry = &list->entries[index];
 
@@ -82,6 +85,8 @@ location_list_set_data(LocationList *list, int index, const DailyForecast *days,
     memcpy(entry->hourly, hourly, sizeof(entry->hourly));
     entry->current_temperature_c = current_temperature_c;
     entry->current_is_day = current_is_day;
+    entry->current_wind_speed_kmh = current_wind_speed_kmh;
+    entry->current_precipitation_probability = current_precipitation_probability;
     entry->has_data = 1;
     entry->last_updated = time(NULL);
 }

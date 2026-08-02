@@ -16,6 +16,8 @@ typedef struct {
     HourlySlot    hourly[HOURLY_SLOTS];
     double        current_temperature_c; /* meaningless until has_data is set */
     int           current_is_day; /* meaningless until has_data is set */
+    double        current_wind_speed_kmh; /* meaningless until has_data is set */
+    int           current_precipitation_probability; /* percent; meaningless until has_data is set */
     int           has_data; /* 0 until weather data has been fetched for this location */
     time_t        last_updated; /* wall-clock time of the last successful fetch;
                                   * meaningless until has_data is set */
@@ -37,6 +39,7 @@ const Location  *location_list_get(const LocationList *list, int index);
  * having data (see Location.has_data). */
 void location_list_set_data(LocationList *list, int index, const DailyForecast *days,
                              const HourlySlot *hourly, double current_temperature_c,
-                             int current_is_day);
+                             int current_is_day, double current_wind_speed_kmh,
+                             int current_precipitation_probability);
 
 #endif /* LOCATIONS_H */

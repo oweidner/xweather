@@ -20,6 +20,7 @@ typedef struct {
     Widget               current_icon;        /* current-conditions icon in the top pane */
     Widget               current_location;    /* current-conditions location name in the top pane */
     Widget               current_temperature; /* current-conditions temperature in the top pane */
+    Widget               current_details;    /* current-conditions wind/rain line in the top pane */
     Widget               status_left;   /* left-aligned third of the status bar */
     Widget               status_middle; /* center-aligned third of the status bar */
     Widget               status_right;  /* right-aligned third of the status bar */
@@ -36,15 +37,18 @@ typedef struct {
     int                  num_location_items;
 } AppView;
 
-/* Builds the menu bar (including a "Location" menu populated from
+/* Builds the menu bar (including a "Locations" menu populated from
  * `locations`), the 3-pane layout, and both forecast views (5-Day Forecast
  * shown by default). */
 AppView *view_create(Widget toplevel, const LocationList *locations);
 void     view_destroy(AppView *view);
 
-/* current_temperature_c is NAN to indicate no reading is available. */
+/* current_temperature_c is NAN to indicate no reading is available.
+ * current_wind_speed_kmh is NAN and current_precipitation_probability is -1
+ * to indicate no reading is available for each, independently. */
 void view_set_forecast(AppView *view, const char *location, const DailyForecast *days,
-                        const HourlySlot *hourly, double current_temperature_c, int current_is_day);
+                        const HourlySlot *hourly, double current_temperature_c, int current_is_day,
+                        double current_wind_speed_kmh, int current_precipitation_probability);
 void view_set_window_title(AppView *view, const char *location, double current_temperature_c);
 void view_show_about_dialog(AppView *view);
 
