@@ -57,3 +57,7 @@ make
 ## Acknowledgements 
 
 - Thanks to the folks at [Gnome Weather](https://apps.gnome.org/Weather/) for visual inspiration and a great set of [weather icons](./assets/icons).
+
+## License
+
+xweather is licensed under the [MIT License](./LICENSE).
