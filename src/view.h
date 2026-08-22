@@ -64,8 +64,17 @@ void view_show_manage_locations_window(AppView *view, const LocationList *locati
  * as everywhere else -- the caller re-wires them afterward. */
 void view_rebuild_location_menu(AppView *view, const LocationList *locations);
 
+/* Checks the Location menu's radio item at `index` and unchecks every
+ * other one -- for a programmatic selection (e.g. restoring the last
+ * active location at startup) that isn't the result of the user clicking
+ * a menu item themselves, so the menu wouldn't otherwise reflect it. */
+void view_set_selected_location_item(AppView *view, int index);
+
 /* Switches the middle pane between the two forecast views, unmanaging the
- * one not shown. */
+ * one not shown, and updates the View menu's radio checkmarks to match
+ * (needed for the same reason as view_set_selected_location_item() above,
+ * when called for a programmatic/restored selection rather than a user's
+ * own menu click). */
 void view_show_daily_forecast(AppView *view);
 void view_show_hourly_forecast(AppView *view);
 

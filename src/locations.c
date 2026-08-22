@@ -73,6 +73,19 @@ location_list_get(const LocationList *list, int index)
     return &list->entries[index];
 }
 
+int
+location_list_find(const LocationList *list, const char *name)
+{
+    int i;
+
+    for (i = 0; i < list->count; i++) {
+        if (strcmp(list->entries[i].name, name) == 0)
+            return i;
+    }
+
+    return -1;
+}
+
 void
 location_list_set_data(LocationList *list, int index, const DailyForecast *days,
                         const HourlySlot *hourly, double current_temperature_c,

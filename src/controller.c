@@ -108,10 +108,13 @@ on_view_selected(Widget w, XtPointer client_data, XtPointer call_data)
     if (!cbs->set)
         return;
 
-    if (w == view->five_day_forecast_item)
+    if (w == view->five_day_forecast_item) {
         view_show_daily_forecast(view);
-    else if (w == view->hourly_forecast_item)
+        config_save_active_view("daily");
+    } else if (w == view->hourly_forecast_item) {
         view_show_hourly_forecast(view);
+        config_save_active_view("hourly");
+    }
 }
 
 static void
@@ -300,7 +303,7 @@ on_manage_locations_apply(const ConfigLocation *entries, int count, void *user_d
     LocationList             *new_locations = location_list_create();
     int                       i;
 
-    config_save(entries, count);
+    config_save_locations(entries, count);
 
     for (i = 0; i < count; i++)
         location_list_add(new_locations, entries[i].name, entries[i].query);
@@ -357,6 +360,12 @@ controller_select_location(WeatherModel *model, LocationList *locations, int ind
 
     g_ctx->selected_index     = index;
     g_ctx->selected_has_error = 0;
+
+    /* Remembered across restarts (see main.c) -- whichever way selection
+     * happened (startup, a menu click, or a Manage Locations Apply), the
+     * newly active location is always the one that gets reselected next
+     * launch. */
+    config_save_active_location(loc->name);
 
     /* Never blocks: shows cached data if we have it, otherwise the N/A
      * placeholder location_list_add() filled in. Always kicks off a fresh

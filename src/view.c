@@ -14,6 +14,7 @@
 #include <Xm/ToggleB.h>
 #include <Xm/Form.h>
 
+#include "ascii_sanitize.h"
 #include "location_manager_view.h"
 #include "view.h"
 #include "weather_icons.h"
@@ -82,8 +83,15 @@ build_location_items(AppView *view, const LocationList *locations)
     view->num_location_items = location_list_count(locations);
     for (i = 0; i < view->num_location_items; i++) {
         const Location *loc = location_list_get(locations, i);
+        char             ascii_name[64];
 
-        view->location_items[i] = XtVaCreateManagedWidget(loc->name, xmToggleButtonWidgetClass,
+        /* Sanitized rather than raw loc->name: this is both the widget's Xt
+         * instance name and (with no explicit XmNlabelString set) its
+         * rendered label -- this app's Motif build can't render arbitrary
+         * Unicode glyphs. */
+        ascii_sanitize(loc->name, ascii_name, sizeof(ascii_name));
+
+        view->location_items[i] = XtVaCreateManagedWidget(ascii_name, xmToggleButtonWidgetClass,
                                                             view->location_menu,
                                                             XmNindicatorType, XmONE_OF_MANY,
                                                             XmNset, i == 0,
@@ -366,10 +374,21 @@ view_destroy(AppView *view)
 }
 
 void
+view_set_selected_location_item(AppView *view, int index)
+{
+    int i;
+
+    for (i = 0; i < view->num_location_items; i++)
+        XtVaSetValues(view->location_items[i], XmNset, i == index, NULL);
+}
+
+void
 view_show_daily_forecast(AppView *view)
 {
     XtUnmanageChild(hourly_forecast_view_widget(view->hourly_forecast_view));
     XtManageChild(daily_forecast_view_widget(view->daily_forecast_view));
+    XtVaSetValues(view->five_day_forecast_item, XmNset, True, NULL);
+    XtVaSetValues(view->hourly_forecast_item, XmNset, False, NULL);
 }
 
 void
@@ -377,6 +396,8 @@ view_show_hourly_forecast(AppView *view)
 {
     XtUnmanageChild(daily_forecast_view_widget(view->daily_forecast_view));
     XtManageChild(hourly_forecast_view_widget(view->hourly_forecast_view));
+    XtVaSetValues(view->hourly_forecast_item, XmNset, True, NULL);
+    XtVaSetValues(view->five_day_forecast_item, XmNset, False, NULL);
 }
 
 /* Our labels render through plain core X fonts (ISO8859-1), which can't
@@ -448,9 +469,13 @@ view_set_forecast(AppView *view, const char *location, const DailyForecast *days
                    const HourlySlot *hourly, double current_temperature_c, int current_is_day,
                    double current_wind_speed_kmh, int current_precipitation_probability)
 {
-    XmString location_str = XmStringCreateLocalized((char *)location);
+    char    ascii_location[128];
+    XmString location_str;
     XmString temperature_str = make_temperature_string(current_temperature_c);
     XmString details_str = make_details_string(current_wind_speed_kmh, current_precipitation_probability);
+
+    ascii_sanitize(location, ascii_location, sizeof(ascii_location));
+    location_str = XmStringCreateLocalized(ascii_location);
 
     view_set_window_title(view, location, current_temperature_c);
 
@@ -490,20 +515,23 @@ view_set_status(AppView *view, StatusArea area, const char *text)
 }
 
 /* current_temperature_c is NAN to omit the "(..°C)" suffix (e.g. right
- * after picking a Location we haven't fetched data for yet). Unlike our
- * XmString labels (which bypass locale via XmStringCreate and need a raw
- * Latin-1 byte), setting XtNtitle goes through Xt's locale-aware WM
- * property conversion, so it wants real UTF-8 here instead. */
+ * after picking a Location we haven't fetched data for yet). Sanitized
+ * rather than raw `location`: a Unicode XtNtitle leaves the window with no
+ * title at all on this app's Motif build, not just a garbled one, so this
+ * needs the same ASCII treatment as any Motif label. */
 void
 view_set_window_title(AppView *view, const char *location, double current_temperature_c)
 {
     char title[192];
+    char ascii_location[128];
+
+    ascii_sanitize(location, ascii_location, sizeof(ascii_location));
 
     if (isnan(current_temperature_c))
-        snprintf(title, sizeof(title), "XWeather - %s", location);
+        snprintf(title, sizeof(title), "XWeather - %s", ascii_location);
     else
         snprintf(title, sizeof(title), "XWeather - %s (%.0f" "\xC2\xB0" "C)",
-                 location, current_temperature_c);
+                 ascii_location, current_temperature_c);
 
     XtVaSetValues(view->toplevel, XtNtitle, title, NULL);
 }

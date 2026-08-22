@@ -1,0 +1,36 @@
+# xweather locations
+#
+# Install this file as:
+#   $XDG_CONFIG_HOME/xweather/locations
+# or, if $XDG_CONFIG_HOME isn't set:
+#   $HOME/.config/xweather/locations
+#
+# (Older installs may still have this at ".../xweather/config" -- that
+# filename is read once and transparently migrated to "locations" the
+# first time the app runs; the old file is left in place, untouched.)
+#
+# Lines starting with '#' and blank lines are ignored. Keys and values are
+# separated by '='; surrounding whitespace is trimmed.
+
+# location = <City, Region, Country>
+#
+# Adds one entry to the Location menu, in the order listed here (the menu
+# itself sorts them alphabetically). The value is both what's shown in the
+# UI and what's sent to the Open-Meteo geocoding API to resolve
+# coordinates, so it should be the full "City, Region, Country" string
+# Open-Meteo's own geocoding search returns for the place you mean, not
+# just a bare city name -- the same convention the app's own Manage
+# Locations search uses when adding a location. A bare name like
+# "Flensburg" or "Paris" isn't guaranteed to resolve to the place you have
+# in mind (there's more than one Paris); the full string pins down exactly
+# one match.
+#
+# Accented/non-ASCII names (e.g. "Çandarlı, İzmir Province, Republic of
+# Türkiye") are fine here -- the app transliterates to ASCII wherever it
+# actually renders a label (Motif can't display arbitrary Unicode glyphs),
+# but stores and geocodes with the real name you enter.
+
+
+location = Aachen, North Rhine-Westphalia, Germany
+location = Apricale, Liguria, Italy
+location = Flensburg, Schleswig-Holstein, Germany

@@ -10,6 +10,8 @@
 #include "weather_client.h"
 
 #define GEOCODING_URL_FMT "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json"
+#define GEOCODING_SEARCH_URL_FMT \
+    "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=%d&language=en&format=json"
 #define FORECAST_URL_FMT  "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f" \
                            "&daily=temperature_2m_max,temperature_2m_min,weathercode" \
                            "&hourly=temperature_2m,weathercode,is_day,precipitation_probability" \
@@ -154,6 +156,123 @@ geocode(CURL *curl, const char *place, double *latitude, double *longitude,
 done:
     json_object_put(root);
     return ok;
+}
+
+/* Minimum length weather_client_geocode_search()'s prefix-shortening
+ * fallback will shrink a query down to -- below this, a "match" is too
+ * broad to be useful. */
+#define MIN_FUZZY_QUERY_LEN 3
+
+static int
+geocode_search_once(const char *query, GeocodeResult *results, int max_results)
+{
+    CURL                *curl;
+    char                *escaped_query;
+    char                 url[512];
+    char                *json_text;
+    struct json_object  *root, *results_arr;
+    int                  found = 0;
+    int                  i, n;
+
+    curl = curl_easy_init();
+    if (!curl)
+        return -1;
+
+    escaped_query = curl_easy_escape(curl, query, 0);
+    if (!escaped_query) {
+        curl_easy_cleanup(curl);
+        return -1;
+    }
+
+    snprintf(url, sizeof(url), GEOCODING_SEARCH_URL_FMT, escaped_query, max_results);
+    curl_free(escaped_query);
+
+    json_text = http_get(curl, url);
+    curl_easy_cleanup(curl);
+    if (!json_text)
+        return -1;
+
+    root = json_tokener_parse(json_text);
+    free(json_text);
+    if (!root) {
+        fprintf(stderr, "weather_client: geocoding search response is not valid JSON\n");
+        return -1;
+    }
+
+    if (!json_object_object_get_ex(root, "results", &results_arr) ||
+        json_object_get_type(results_arr) != json_type_array) {
+        json_object_put(root);
+        return 0;
+    }
+
+    n = json_object_array_length(results_arr);
+    if (n > max_results)
+        n = max_results;
+
+    for (i = 0; i < n; i++) {
+        struct json_object *entry = json_object_array_get_idx(results_arr, i);
+        struct json_object *name_obj, *admin1_obj, *country_obj;
+        GeocodeResult       *out = &results[found];
+
+        if (!json_object_object_get_ex(entry, "name", &name_obj))
+            continue;
+
+        memset(out, 0, sizeof(*out));
+        strncpy(out->name, json_object_get_string(name_obj), sizeof(out->name) - 1);
+
+        if (json_object_object_get_ex(entry, "admin1", &admin1_obj))
+            strncpy(out->admin1, json_object_get_string(admin1_obj), sizeof(out->admin1) - 1);
+
+        if (json_object_object_get_ex(entry, "country", &country_obj))
+            strncpy(out->country, json_object_get_string(country_obj), sizeof(out->country) - 1);
+
+        found++;
+    }
+
+    json_object_put(root);
+    return found;
+}
+
+int
+weather_client_geocode_search(const char *query, GeocodeResult *results, int max_results)
+{
+    int    n = geocode_search_once(query, results, max_results);
+    size_t len = strlen(query);
+
+    /* Open-Meteo's own matching is supposed to be diacritic-insensitive,
+     * but isn't for every letter -- e.g. an ASCII "i" doesn't match Turkish
+     * dotless "ı", so "candarli" finds nothing even though "Çandarlı" is
+     * right there. Retrying with the query shortened one character at a
+     * time leans on Open-Meteo's own prefix matching to route around a
+     * single mismatched trailing character -- "candarli" -> "candarl"
+     * still finds it. Stops at MIN_FUZZY_QUERY_LEN so a real "no such
+     * place" doesn't degrade into matching almost anything, and only
+     * kicks in when the query as typed found nothing at all. */
+    while (n == 0 && len > MIN_FUZZY_QUERY_LEN) {
+        char shortened[96];
+
+        len--;
+        if (len >= sizeof(shortened))
+            continue;
+
+        memcpy(shortened, query, len);
+        shortened[len] = '\0';
+
+        n = geocode_search_once(shortened, results, max_results);
+    }
+
+    return n;
+}
+
+void
+weather_client_geocode_format(const GeocodeResult *result, char *out, size_t out_size)
+{
+    if (result->admin1[0] != '\0' && result->country[0] != '\0')
+        snprintf(out, out_size, "%s, %s, %s", result->name, result->admin1, result->country);
+    else if (result->country[0] != '\0')
+        snprintf(out, out_size, "%s, %s", result->name, result->country);
+    else
+        snprintf(out, out_size, "%s", result->name);
 }
 
 /* Fills result->hourly[0..HOURLY_SLOTS-1] from the response's "hourly" block,

@@ -1,4 +1,5 @@
 #include <locale.h>
+#include <string.h>
 
 #include <curl/curl.h>
 #include <Xm/Xm.h>
@@ -35,7 +36,7 @@ main(int argc, char **argv)
      * for the API URLs we build. */
     setlocale(LC_NUMERIC, "C");
 
-    config = config_load();
+    config = config_load_locations();
     locations = location_list_create();
 
     if (config_location_count(config) > 0) {
@@ -45,16 +46,19 @@ main(int argc, char **argv)
             location_list_add(locations, config_location_name(config, i),
                                config_location_query(config, i));
     } else {
-        /* No config file (or no "location" entries in it) -- fall back to a
-         * small built-in default list. Display name stays ASCII (our labels
-         * can't render arbitrary Unicode), but the geocoding query needs the
-         * proper Turkish spelling to resolve at all: "Candarli" alone
-         * returns zero results, "\xC3\x87andarl\xC4\xB1" (Çandarlı, UTF-8)
-         * correctly finds the İzmir Province town. */
-        location_list_add(locations, "Aachen", "Aachen");
-        location_list_add(locations, "Apricale", "Apricale");
-        location_list_add(locations, "Flensburg", "Flensburg");
-        location_list_add(locations, "Candarli", "\xC3\x87" "andarl" "\xC4\xB1");
+        /* No locations file (or no "location" entries in it) -- fall back to a
+         * small built-in default list. Each is the full "City, Region,
+         * Country" string Open-Meteo's geocoding search itself returns for
+         * that place (the same convention config.c's own DEFAULT_LOCATION_NAMES
+         * and the Manage Locations search use), so it resolves to exactly
+         * one place rather than whatever the geocoder ranks first for a
+         * bare, ambiguous name. */
+        location_list_add(locations, "Aachen, North Rhine-Westphalia, Germany",
+                           "Aachen, North Rhine-Westphalia, Germany");
+        location_list_add(locations, "Apricale, Liguria, Italy",
+                           "Apricale, Liguria, Italy");
+        location_list_add(locations, "Flensburg, Schleswig-Holstein, Germany",
+                           "Flensburg, Schleswig-Holstein, Germany");
     }
 
     config_destroy(config);
@@ -65,7 +69,40 @@ main(int argc, char **argv)
 
     XtRealizeWidget(toplevel);
 
-    controller_select_location(model, locations, 0);
+    {
+        char saved_active[96];
+        int  start_index = 0;
+
+        /* Reselect whichever location was active last time, if it's still
+         * in the list -- otherwise fall back to the first (alphabetical)
+         * entry, same as before this existed. */
+        if (config_load_active_location(saved_active, sizeof(saved_active))) {
+            int found = location_list_find(locations, saved_active);
+
+            if (found >= 0)
+                start_index = found;
+        }
+
+        controller_select_location(model, locations, start_index);
+
+        /* controller_select_location() only updates the model/fetch state --
+         * the Location menu's own radio checkmark still needs to be told
+         * about a non-default startup selection explicitly (it's only ever
+         * set at widget-creation time, for index 0, otherwise). */
+        view_set_selected_location_item(view, start_index);
+    }
+
+    {
+        char saved_view[16];
+
+        /* Same idea for which forecast view was showing -- "5-Day Forecast"
+         * is view_create()'s own built-in default, so only switch away from
+         * it if the state file says otherwise. */
+        if (config_load_active_view(saved_view, sizeof(saved_view)) &&
+            strcmp(saved_view, "hourly") == 0)
+            view_show_hourly_forecast(view);
+    }
+
     controller_prefetch_all();
 
     XtAppMainLoop(app);
